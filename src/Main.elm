@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Browser.Events as Events
+import Browser.Events as Events exposing (Visibility(..))
 import Html exposing (Attribute, Html, button, div, img, text)
 import Html.Attributes exposing (height, property, src, style)
 import Html.Events exposing (onClick)
@@ -9,20 +9,27 @@ import Http
 import Json.Decode as JD exposing (Decoder)
 import Json.Encode as JE
 import List.Extra as LE
+import Time exposing (Posix)
 
 
 type alias Model =
     { err : Maybe String
     , sources : List String
     , src : String
+    , time : Int
+    , lastSwapTime : Int
+    , visibility : Visibility
     }
 
 
 init : ( Model, Cmd Msg )
 init =
     ( { err = Nothing
-      , sources = [ "stoned-eyeballs-2-web.jpg" ]
+      , sources = [ "stonedeyeballs.jpg" ]
       , src = "stonedeyeballs.jpg"
+      , time = 0
+      , lastSwapTime = 0
+      , visibility = Visible
       }
     , Http.get
         { url = "images/index.json"
@@ -34,6 +41,13 @@ init =
 type Msg
     = GotIndex (Result Http.Error (List String))
     | MouseDown
+    | ReceiveTime Posix
+    | SetVisible Visibility
+
+
+swapInterval : Int
+swapInterval =
+    5 * 1000
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -41,6 +55,36 @@ update msg model =
     case msg of
         MouseDown ->
             ( nextImage model, Cmd.none )
+
+        ReceiveTime posix ->
+            let
+                millis =
+                    Time.posixToMillis posix
+            in
+            let
+                m =
+                    { model
+                        | time = millis
+                        , lastSwapTime =
+                            if model.lastSwapTime == 0 then
+                                millis
+
+                            else
+                                model.lastSwapTime
+                    }
+            in
+            if
+                (m.visibility == Visible)
+                    && (m.lastSwapTime /= 0)
+                    && (millis >= m.lastSwapTime + swapInterval)
+            then
+                ( nextImage m, Cmd.none )
+
+            else
+                ( m, Cmd.none )
+
+        SetVisible v ->
+            ( { model | visibility = Debug.log "visibility" v }, Cmd.none )
 
         GotIndex result ->
             case result of
@@ -67,6 +111,7 @@ nextImage model =
     { model
         | src =
             nextElement model.sources model.src
+        , lastSwapTime = model.time
     }
 
 
@@ -125,7 +170,11 @@ main =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Events.onMouseDown mouseDownDecoder
+    Sub.batch
+        [ Events.onMouseDown mouseDownDecoder
+        , Events.onVisibilityChange SetVisible
+        , Time.every 100.0 ReceiveTime
+        ]
 
 
 mouseDownDecoder : Decoder Msg
