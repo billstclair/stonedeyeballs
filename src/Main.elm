@@ -164,6 +164,12 @@ view model =
                 , target "_blank"
                 ]
                 [ text "GitHub" ]
+            , text " "
+            , a
+                [ href "https://stoneder.club"
+                , target "_blank"
+                ]
+                [ text "Stoneder.club" ]
             ]
         ]
 
