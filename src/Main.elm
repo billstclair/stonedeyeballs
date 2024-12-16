@@ -2,8 +2,8 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events as Events exposing (Visibility(..))
-import Html exposing (Attribute, Html, a, br, button, div, img, p, text)
-import Html.Attributes exposing (height, href, property, src, style, target)
+import Html exposing (Attribute, Html, a, button, div, img, input, p, span, text)
+import Html.Attributes exposing (checked, height, href, property, src, style, target, title, type_)
 import Html.Events exposing (onClick)
 import Http
 import Json.Decode as JD exposing (Decoder)
@@ -19,6 +19,7 @@ type alias Model =
     , time : Int
     , lastSwapTime : Int
     , visibility : Visibility
+    , switchEnabled : Bool
     }
 
 
@@ -30,6 +31,7 @@ init =
       , time = 0
       , lastSwapTime = 0
       , visibility = Visible
+      , switchEnabled = True
       }
     , Http.get
         { url = "images/index.json"
@@ -43,6 +45,7 @@ type Msg
     | MouseDown
     | ReceiveTime Posix
     | SetVisible Visibility
+    | ToggleSwitchEnabled
 
 
 swapInterval : Int
@@ -75,6 +78,7 @@ update msg model =
             in
             if
                 (m.visibility == Visible)
+                    && m.switchEnabled
                     && (m.lastSwapTime /= 0)
                     && (millis >= m.lastSwapTime + swapInterval)
             then
@@ -85,6 +89,9 @@ update msg model =
 
         SetVisible v ->
             ( { model | visibility = Debug.log "visibility" v }, Cmd.none )
+
+        ToggleSwitchEnabled ->
+            ( { model | switchEnabled = not model.switchEnabled }, Cmd.none )
 
         GotIndex result ->
             case result of
@@ -158,7 +165,11 @@ view model =
             []
         , p []
             [ text "Click on the image to change it."
-            , br [] []
+            , br
+            , checkBox ToggleSwitchEnabled
+                model.switchEnabled
+                "Auto-switch images"
+            , br
             , a
                 [ href "https://github.com/billstclair/stonedeyeballs"
                 , target "_blank"
@@ -172,6 +183,38 @@ view model =
                 [ text "Stoneder.club" ]
             ]
         ]
+
+
+titledCheckBox : String -> Msg -> Bool -> String -> Html Msg
+titledCheckBox theTitle msg isChecked label =
+    span
+        [ onClick msg
+        , style "cursor" "default"
+        , title theTitle
+        , style "white-space" "nowrap"
+        ]
+        [ input
+            [ type_ "checkbox"
+            , checked isChecked
+            ]
+            []
+        , b label
+        ]
+
+
+checkBox : Msg -> Bool -> String -> Html Msg
+checkBox =
+    titledCheckBox ""
+
+
+b : String -> Html msg
+b string =
+    Html.b [] [ text string ]
+
+
+br : Html msg
+br =
+    Html.br [] []
 
 
 main : Program () Model Msg
