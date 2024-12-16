@@ -1,6 +1,5 @@
 #!/bin/bash
 
-${PWD}/build
-#elm make src/WatchColorSchemeExample.elm --output site/watch-color-scheme.js
+${PWD}/bin/build
 cd site
 rsyncit

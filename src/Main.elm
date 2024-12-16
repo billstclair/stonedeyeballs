@@ -2,46 +2,94 @@ module Main exposing (main)
 
 import Browser
 import Html exposing (Attribute, Html, button, div, img, text)
-import Html.Attributes exposing (height, property, src)
+import Html.Attributes exposing (height, property, src, style)
 import Html.Events exposing (onClick)
+import Http
+import Json.Decode as JD
 import Json.Encode as JE
+import List.Extra as LE
 
 
 type alias Model =
-    { count : Int }
+    { err : Maybe String
+    , sources : List String
+    , src : String
+    }
 
 
-initialModel : Model
-initialModel =
-    { count = 0 }
+init : ( Model, Cmd Msg )
+init =
+    ( { err = Nothing
+      , sources = [ "stoned-eyeballs-2-web.jpg" ]
+      , src = "stonedeyeballs.jpg"
+      }
+    , Http.get
+        { url = "images/index.json"
+        , expect = Http.expectJson GotIndex (JD.list JD.string)
+        }
+    )
 
 
 type Msg
-    = Increment
-    | Decrement
+    = GotIndex (Result Http.Error (List String))
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Increment ->
-            { model | count = model.count + 1 }
+        GotIndex result ->
+            case result of
+                Err e ->
+                    ( { model | err = Just <| Debug.toString e }
+                    , Cmd.none
+                    )
 
-        Decrement ->
-            { model | count = model.count - 1 }
-
-
-textProperty : String -> String -> Attribute msg
-textProperty name value =
-    property name <| JE.string value
+                Ok list ->
+                    ( { model | sources = Debug.log "sources" list }, Cmd.none )
 
 
 centerFit : List (Attribute msg)
 centerFit =
-    [ textProperty "max-width" "100%"
-    , textProperty "max-height" "100vh"
-    , textProperty "margin" "auto"
+    [ style "max-width" "100%"
+    , style "max-height" "100vh"
+    , style "margin" "auto"
     ]
+
+
+nextImage : Model -> Model
+nextImage model =
+    { model
+        | src =
+            nextElement model.sources model.src
+    }
+
+
+nextElement : List String -> String -> String
+nextElement strings string =
+    case LE.elemIndex string strings of
+        Nothing ->
+            case LE.getAt 0 strings of
+                Just s ->
+                    s
+
+                Nothing ->
+                    "stonedeyeballs.jpg"
+
+        Just index ->
+            let
+                idx =
+                    if index < List.length strings then
+                        index + 1
+
+                    else
+                        0
+            in
+            case LE.getAt idx strings of
+                Just s ->
+                    s
+
+                Nothing ->
+                    "stonedeyeballs.jpg"
 
 
 view : Model -> Html Msg
@@ -49,8 +97,8 @@ view model =
     div []
         [ img
             (List.concat
-                [ [ src "images/stoned-eyeballs-2-web.jpg" ]
-                , centerFit
+                [ centerFit
+                , [ src <| "images/" ++ model.src ]
                 ]
             )
             []
@@ -59,8 +107,9 @@ view model =
 
 main : Program () Model Msg
 main =
-    Browser.sandbox
-        { init = initialModel
+    Browser.element
+        { init = \flags -> init
         , view = view
         , update = update
+        , subscriptions = \m -> Sub.none
         }
