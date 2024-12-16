@@ -2,8 +2,8 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events as Events exposing (Visibility(..))
-import Html exposing (Attribute, Html, button, div, img, text)
-import Html.Attributes exposing (height, property, src, style)
+import Html exposing (Attribute, Html, a, br, button, div, img, p, text)
+import Html.Attributes exposing (height, href, property, src, style)
 import Html.Events exposing (onClick)
 import Http
 import Json.Decode as JD exposing (Decoder)
@@ -155,6 +155,12 @@ view model =
                 ]
             )
             []
+        , p []
+            [ text "Click on the image to change it."
+            , br [] []
+            , a [ href "https://github.com/billstclair/stonedeyeballs" ]
+                [ text "GitHub" ]
+            ]
         ]
 
 
