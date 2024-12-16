@@ -1,11 +1,12 @@
 module Main exposing (main)
 
 import Browser
+import Browser.Events as Events
 import Html exposing (Attribute, Html, button, div, img, text)
 import Html.Attributes exposing (height, property, src, style)
 import Html.Events exposing (onClick)
 import Http
-import Json.Decode as JD
+import Json.Decode as JD exposing (Decoder)
 import Json.Encode as JE
 import List.Extra as LE
 
@@ -32,11 +33,15 @@ init =
 
 type Msg
     = GotIndex (Result Http.Error (List String))
+    | MouseDown
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        MouseDown ->
+            ( nextImage model, Cmd.none )
+
         GotIndex result ->
             case result of
                 Err e ->
@@ -114,5 +119,15 @@ main =
         { init = \flags -> init
         , view = view
         , update = update
-        , subscriptions = \m -> Sub.none
+        , subscriptions = subscriptions
         }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Events.onMouseDown mouseDownDecoder
+
+
+mouseDownDecoder : Decoder Msg
+mouseDownDecoder =
+    JD.succeed MouseDown
