@@ -52,7 +52,8 @@ centerFit : List (Attribute msg)
 centerFit =
     [ style "max-width" "100%"
     , style "max-height" "100vh"
-    , style "margin" "auto"
+
+    --, style "margin" "auto"
     ]
 
 
@@ -94,11 +95,13 @@ nextElement strings string =
 
 view : Model -> Html Msg
 view model =
-    div []
+    div [ style "text-align" "center" ]
         [ img
             (List.concat
                 [ centerFit
-                , [ src <| "images/" ++ model.src ]
+                , [ src <| "images/" ++ model.src
+                  , style "text-align" "center"
+                  ]
                 ]
             )
             []
