@@ -129,7 +129,7 @@ nextElement strings string =
         Just index ->
             let
                 idx =
-                    if index < List.length strings then
+                    if index + 1 < List.length strings then
                         index + 1
 
                     else
