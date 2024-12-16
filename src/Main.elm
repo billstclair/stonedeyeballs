@@ -3,7 +3,7 @@ module Main exposing (main)
 import Browser
 import Browser.Events as Events exposing (Visibility(..))
 import Html exposing (Attribute, Html, a, br, button, div, img, p, text)
-import Html.Attributes exposing (height, href, property, src, style)
+import Html.Attributes exposing (height, href, property, src, style, target)
 import Html.Events exposing (onClick)
 import Http
 import Json.Decode as JD exposing (Decoder)
@@ -151,6 +151,7 @@ view model =
                 [ centerFit
                 , [ src <| "images/" ++ model.src
                   , style "text-align" "center"
+                  , onClick MouseDown
                   ]
                 ]
             )
@@ -158,7 +159,10 @@ view model =
         , p []
             [ text "Click on the image to change it."
             , br [] []
-            , a [ href "https://github.com/billstclair/stonedeyeballs" ]
+            , a
+                [ href "https://github.com/billstclair/stonedeyeballs"
+                , target "_blank"
+                ]
                 [ text "GitHub" ]
             ]
         ]
@@ -177,9 +181,10 @@ main =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ Events.onMouseDown mouseDownDecoder
-        , Events.onVisibilityChange SetVisible
+        [ Events.onVisibilityChange SetVisible
         , Time.every 100.0 ReceiveTime
+
+        --, Events.onMouseDown mouseDownDecoder
         ]
 
 
