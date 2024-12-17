@@ -9,6 +9,7 @@ import Http
 import Json.Decode as JD exposing (Decoder)
 import Json.Encode as JE
 import List.Extra as LE
+import String.Extra as SE
 import Time exposing (Posix)
 
 
@@ -150,6 +151,26 @@ nextElement strings string =
                     "stonedeyeballs.jpg"
 
 
+getNameFromFileName : String -> String
+getNameFromFileName filename =
+    let
+        noType =
+            SE.leftOfBack "." filename
+
+        name =
+            SE.rightOfBack "/" noType
+
+        res =
+            String.replace "-" " " <|
+                if name == "" then
+                    noType
+
+                else
+                    name
+    in
+    SE.toTitleCase res
+
+
 view : Model -> Html Msg
 view model =
     div [ style "text-align" "center" ]
@@ -164,7 +185,13 @@ view model =
             )
             []
         , p []
-            [ text "Click on the image to change it."
+            [ let
+                name =
+                    getNameFromFileName model.src
+              in
+              text name
+            , br
+            , text "Click on the image to change it."
             , br
             , checkBox ToggleSwitchEnabled
                 model.switchEnabled
