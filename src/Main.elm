@@ -27,8 +27,8 @@ type alias Model =
 init : ( Model, Cmd Msg )
 init =
     ( { err = Nothing
-      , sources = [ "stonedeyeballs.jpg" ]
-      , src = "stonedeyeballs.jpg"
+      , sources = [ "stoned-eyeballs.jpg" ]
+      , src = "stoned-eyeballs.jpg"
       , time = 0
       , lastSwapTime = 0
       , visibility = Visible
@@ -132,7 +132,7 @@ nextElement strings string =
                     s
 
                 Nothing ->
-                    "stonedeyeballs.jpg"
+                    "stoned-eyeballs.jpg"
 
         Just index ->
             let
@@ -148,7 +148,7 @@ nextElement strings string =
                     s
 
                 Nothing ->
-                    "stonedeyeballs.jpg"
+                    "stoned-eyeballs.jpg"
 
 
 getNameFromFileName : String -> String
