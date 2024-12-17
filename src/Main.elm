@@ -184,14 +184,14 @@ view model =
                 ]
             )
             []
+        , br
+        , let
+            name =
+                getNameFromFileName model.src
+          in
+          text name
         , p []
-            [ let
-                name =
-                    getNameFromFileName model.src
-              in
-              text name
-            , br
-            , text "Click on the image to change it."
+            [ text "Click on the image to change it."
             , br
             , checkBox ToggleSwitchEnabled
                 model.switchEnabled
