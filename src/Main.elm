@@ -2,13 +2,18 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events as Events exposing (Visibility(..))
+import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
+import Dict exposing (Dict)
 import Html exposing (Attribute, Html, a, button, div, img, input, p, span, text)
 import Html.Attributes exposing (checked, height, href, property, src, style, target, title, type_)
 import Html.Events exposing (onClick)
 import Http
 import Json.Decode as JD exposing (Decoder)
-import Json.Encode as JE
+import Json.Decode.Pipeline as DP exposing (custom, hardcoded, optional, required)
+import Json.Encode as JE exposing (Value)
 import List.Extra as LE
+import PortFunnel.LocalStorage as LocalStorage
+import PortFunnels exposing (FunnelDict, Handler(..), State)
 import String.Extra as SE
 import Time exposing (Posix)
 
@@ -21,7 +26,33 @@ type alias Model =
     , lastSwapTime : Int
     , visibility : Visibility
     , switchEnabled : Bool
+    , started : Started
+    , funnelState : State
     }
+
+
+type alias SavedModel =
+    { sources : List String
+    , src : String
+    , switchEnabled : Bool
+    }
+
+
+savedModelToModel : SavedModel -> Model -> Model
+savedModelToModel savedModel model =
+    { model
+        | sources = savedModel.sources
+        , src = savedModel.src
+        , switchEnabled = savedModel.switchEnabled
+    }
+
+
+savedModelDecoder : Decoder SavedModel
+savedModelDecoder =
+    JD.succeed SavedModel
+        |> required "sources" (JD.list JD.string)
+        |> required "src" JD.string
+        |> required "switchEnabled" JD.bool
 
 
 init : ( Model, Cmd Msg )
@@ -33,6 +64,8 @@ init =
       , lastSwapTime = 0
       , visibility = Visible
       , switchEnabled = True
+      , started = NotStarted
+      , funnelState = initialFunnelState
       }
     , Http.get
         { url = "images/index.json"
@@ -41,12 +74,59 @@ init =
     )
 
 
+
+---
+--- Persistence
+---
+
+
+put : String -> Maybe Value -> Cmd Msg
+put key value =
+    localStorageSend (LocalStorage.put (Debug.log "put" key) value)
+
+
+get : String -> Cmd Msg
+get key =
+    localStorageSend (LocalStorage.get <| Debug.log "get" key)
+
+
+getLabeled : String -> String -> Cmd Msg
+getLabeled label key =
+    localStorageSend
+        (LocalStorage.getLabeled label <|
+            Debug.log ("getLabeled " ++ label) key
+        )
+
+
+listKeysLabeled : String -> String -> Cmd Msg
+listKeysLabeled label prefix =
+    localStorageSend (LocalStorage.listKeysLabeled label prefix)
+
+
+localStoragePrefix : String
+localStoragePrefix =
+    "stonedeyeballs"
+
+
+initialFunnelState : PortFunnels.State
+initialFunnelState =
+    PortFunnels.initialState localStoragePrefix
+
+
+localStorageSend : LocalStorage.Message -> Cmd Msg
+localStorageSend message =
+    LocalStorage.send (getCmdPort LocalStorage.moduleName ())
+        message
+        initialFunnelState.storage
+
+
 type Msg
     = GotIndex (Result Http.Error (List String))
     | MouseDown
     | ReceiveTime Posix
     | SetVisible Visibility
     | ToggleSwitchEnabled
+    | Process Value
 
 
 swapInterval : Int
@@ -103,6 +183,154 @@ update msg model =
 
                 Ok list ->
                     ( { model | sources = Debug.log "sources" list }, Cmd.none )
+
+        Process value ->
+            case
+                PortFunnels.processValue funnelDict
+                    value
+                    model.funnelState
+                    model
+            of
+                Err error ->
+                    { model | err = Just <| Debug.toString error }
+                        |> withNoCmd
+
+                Ok res ->
+                    res
+
+
+{-| The `model` parameter is necessary here for `PortFunnels.makeFunnelDict`.
+-}
+getCmdPort : String -> model -> (Value -> Cmd Msg)
+getCmdPort moduleName _ =
+    PortFunnels.getCmdPort Process moduleName False
+
+
+funnelDict : FunnelDict Model Msg
+funnelDict =
+    PortFunnels.makeFunnelDict
+        [ LocalStorageHandler storageHandler
+        ]
+        getCmdPort
+
+
+{-| Persistent storage keys
+-}
+pk =
+    { model = "model"
+    }
+
+
+type Started
+    = NotStarted
+    | StartedReadingModel
+    | Started
+
+
+storageHandler : LocalStorage.Response -> PortFunnels.State -> Model -> ( Model, Cmd Msg )
+storageHandler response state model =
+    let
+        mdl =
+            { model
+                | started =
+                    if
+                        LocalStorage.isLoaded state.storage
+                            && (model.started == NotStarted)
+                    then
+                        StartedReadingModel
+
+                    else
+                        model.started
+            }
+
+        cmd =
+            if
+                (mdl.started == StartedReadingModel)
+                    && (model.started == NotStarted)
+            then
+                Cmd.batch
+                    [ get pk.model
+                    ]
+
+            else
+                Cmd.none
+
+        lbl label =
+            case label of
+                Nothing ->
+                    ""
+
+                Just l ->
+                    "[" ++ l ++ "] "
+    in
+    case response of
+        LocalStorage.GetResponse { label, key, value } ->
+            handleGetResponse label key value mdl
+
+        LocalStorage.ListKeysResponse { label, prefix, keys } ->
+            handleListKeysResponse label prefix keys mdl
+
+        _ ->
+            mdl |> withCmd cmd
+
+
+handleListKeysResponse : Maybe String -> String -> List String -> Model -> ( Model, Cmd Msg )
+handleListKeysResponse maybeLabel prefix keys model =
+    case maybeLabel of
+        Nothing ->
+            model |> withNoCmd
+
+        Just label ->
+            model |> withCmds (List.map (getLabeled label) keys)
+
+
+handleGetResponse : Maybe String -> String -> Maybe Value -> Model -> ( Model, Cmd Msg )
+handleGetResponse maybeLabel key maybeValue model =
+    case maybeLabel of
+        Nothing ->
+            if Debug.log "handleGetResponse, key" key == pk.model then
+                handleGetModel maybeValue model
+
+            else
+                model |> withNoCmd
+
+        Just label ->
+            -- This doesn't happen in this app
+            case maybeValue of
+                Nothing ->
+                    model |> withNoCmd
+
+                Just value ->
+                    model |> withNoCmd
+
+
+handleGetModel : Maybe Value -> Model -> ( Model, Cmd Msg )
+handleGetModel maybeValue model =
+    let
+        model2 =
+            { model
+                | started = Started
+                , err = Nothing
+            }
+    in
+    case maybeValue of
+        Nothing ->
+            model2 |> withNoCmd
+
+        Just value ->
+            case JD.decodeValue savedModelDecoder value of
+                Err err ->
+                    { model2
+                        | err =
+                            Just <|
+                                Debug.log "Error decoding SavedModel"
+                                    (JD.errorToString err)
+                    }
+                        |> withNoCmd
+
+                Ok savedModel ->
+                    savedModelToModel savedModel model2
+                        |> withNoCmd
 
 
 centerFit : List (Attribute msg)
