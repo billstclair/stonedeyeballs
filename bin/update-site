@@ -1,5 +1,5 @@
 #!/bin/bash
 
-${PWD}/bin/build
+bin/build
 cd site
 rsyncit
