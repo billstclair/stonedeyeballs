@@ -151,6 +151,7 @@ type Msg
     | MouseDown
     | ReceiveTime Posix
     | SetVisible Visibility
+    | OnKeyPress Bool String
     | ToggleSwitchEnabled
     | Process Value
 
@@ -219,6 +220,24 @@ updateInternal msg model =
 
         SetVisible v ->
             ( { model | visibility = Debug.log "visibility" v }, Cmd.none )
+
+        OnKeyPress isDown key ->
+            if not isDown then
+                model |> withNoCmd
+
+            else
+                let
+                    k =
+                        Debug.log "KeyDown" key
+                in
+                if List.member k [ "ArrowLeft", "j", "J", "s", "S" ] then
+                    prevImage model |> withNoCmd
+
+                else if List.member k [ "ArrowRight", "l", "k", "f", "F" ] then
+                    nextImage model |> withNoCmd
+
+                else
+                    model |> withNoCmd
 
         ToggleSwitchEnabled ->
             ( { model | switchEnabled = not model.switchEnabled }, Cmd.none )
@@ -393,11 +412,53 @@ centerFit =
 
 nextImage : Model -> Model
 nextImage model =
-    { model
-        | src =
-            nextElement model.sources model.src
-        , lastSwapTime = model.time
-    }
+    viewImage model
+        (case LE.elemIndex model.src model.sources of
+            Just idx ->
+                idx + 1
+
+            Nothing ->
+                List.length model.sources - 1
+        )
+
+
+prevImage : Model -> Model
+prevImage model =
+    viewImage model
+        (case LE.elemIndex model.src model.sources of
+            Just idx ->
+                idx - 1
+
+            Nothing ->
+                0
+        )
+
+
+viewImage : Model -> Int -> Model
+viewImage model index =
+    let
+        sources =
+            model.sources
+
+        size =
+            List.length sources
+
+        idx =
+            if Debug.log "viewImage" index < 0 then
+                size - 1
+
+            else if index >= size then
+                0
+
+            else
+                index
+    in
+    case LE.getAt idx sources of
+        Just s ->
+            { model | src = s }
+
+        _ ->
+            model
 
 
 nextElement : List String -> String -> String
@@ -477,7 +538,7 @@ viewInternal model =
           in
           text name
         , p []
-            [ text "Click on the image to change it."
+            [ text "Click on the image to change. Or press s/f, j/l or arrows."
             , br
             , checkBox ToggleSwitchEnabled
                 model.switchEnabled
@@ -544,11 +605,19 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Events.onVisibilityChange SetVisible
+        , Events.onKeyDown <| keyDecoder True
+        , Events.onKeyUp <| keyDecoder False
         , Time.every 100.0 ReceiveTime
         , PortFunnels.subscriptions Process model
 
         --, Events.onMouseDown mouseDownDecoder
         ]
+
+
+keyDecoder : Bool -> Decoder Msg
+keyDecoder keyDown =
+    JD.field "key" JD.string
+        |> JD.map (OnKeyPress keyDown)
 
 
 mouseDownDecoder : Decoder Msg
