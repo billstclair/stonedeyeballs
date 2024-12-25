@@ -450,43 +450,47 @@ getNameFromFileName filename =
 
 view : Model -> Html Msg
 view model =
-    div [ style "text-align" "center" ]
-        [ img
-            (List.concat
-                [ centerFit
-                , [ src <| "images/" ++ model.src
-                  , style "text-align" "center"
-                  , onClick MouseDown
-                  ]
-                ]
-            )
-            []
-        , br
-        , let
-            name =
-                getNameFromFileName model.src
-          in
-          text name
-        , p []
-            [ text "Click on the image to change it."
+    if model.started /= Started then
+        text ""
+
+    else
+        div [ style "text-align" "center" ]
+            [ img
+                (List.concat
+                    [ centerFit
+                    , [ src <| "images/" ++ model.src
+                      , style "text-align" "center"
+                      , onClick MouseDown
+                      ]
+                    ]
+                )
+                []
             , br
-            , checkBox ToggleSwitchEnabled
-                model.switchEnabled
-                "Auto-switch images"
-            , br
-            , a
-                [ href "https://github.com/billstclair/stonedeyeballs"
-                , target "_blank"
+            , let
+                name =
+                    getNameFromFileName model.src
+              in
+              text name
+            , p []
+                [ text "Click on the image to change it."
+                , br
+                , checkBox ToggleSwitchEnabled
+                    model.switchEnabled
+                    "Auto-switch images"
+                , br
+                , a
+                    [ href "https://github.com/billstclair/stonedeyeballs"
+                    , target "_blank"
+                    ]
+                    [ text "GitHub" ]
+                , text " "
+                , a
+                    [ href "https://stoneder.club"
+                    , target "_blank"
+                    ]
+                    [ text "Stoneder.club" ]
                 ]
-                [ text "GitHub" ]
-            , text " "
-            , a
-                [ href "https://stoneder.club"
-                , target "_blank"
-                ]
-                [ text "Stoneder.club" ]
             ]
-        ]
 
 
 titledCheckBox : String -> Msg -> Bool -> String -> Html Msg
