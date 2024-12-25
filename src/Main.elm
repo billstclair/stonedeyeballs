@@ -38,6 +38,23 @@ type alias SavedModel =
     }
 
 
+saveModel : Model -> Cmd Msg
+saveModel model =
+    put "model"
+        (modelToSavedModel model
+            |> encodeSavedModel
+            |> Just
+        )
+
+
+modelToSavedModel : Model -> SavedModel
+modelToSavedModel model =
+    { sources = model.sources
+    , src = model.src
+    , switchEnabled = model.switchEnabled
+    }
+
+
 savedModelToModel : SavedModel -> Model -> Model
 savedModelToModel savedModel model =
     { model
@@ -53,6 +70,15 @@ savedModelDecoder =
         |> required "sources" (JD.list JD.string)
         |> required "src" JD.string
         |> required "switchEnabled" JD.bool
+
+
+encodeSavedModel : SavedModel -> Value
+encodeSavedModel savedModel =
+    JE.object
+        [ ( "sources", JE.list (\s -> JE.string s) savedModel.sources )
+        , ( "src", JE.string savedModel.src )
+        , ( "switchEnabled", JE.bool savedModel.switchEnabled )
+        ]
 
 
 init : ( Model, Cmd Msg )
@@ -136,6 +162,29 @@ swapInterval =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        doUpdate =
+            case msg of
+                ReceiveTime _ ->
+                    False
+
+                _ ->
+                    True
+
+        ( mdl, cmd ) =
+            updateInternal msg model
+    in
+    if doUpdate && mdl.started == Started then
+        mdl
+            |> withCmds
+                [ cmd, saveModel mdl ]
+
+    else
+        mdl |> withCmd cmd
+
+
+updateInternal : Msg -> Model -> ( Model, Cmd Msg )
+updateInternal msg model =
     case msg of
         MouseDown ->
             ( nextImage model, Cmd.none )
@@ -487,6 +536,7 @@ subscriptions model =
     Sub.batch
         [ Events.onVisibilityChange SetVisible
         , Time.every 100.0 ReceiveTime
+        , PortFunnels.subscriptions Process model
 
         --, Events.onMouseDown mouseDownDecoder
         ]
