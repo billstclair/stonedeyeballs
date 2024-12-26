@@ -618,6 +618,16 @@ viewInternal model =
                 , target "_blank"
                 ]
                 [ text "Stoneder.club" ]
+            , p []
+                [ text "Copyright "
+                , text special.copyright
+                , text " 2024, "
+                , a
+                    [ href "https://billstclair.com/"
+                    , target "_blank"
+                    ]
+                    [ text "Bill St. Clair" ]
+                ]
             ]
         ]
 
