@@ -4,8 +4,8 @@ import Browser
 import Browser.Events as Events exposing (Visibility(..))
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
-import Html exposing (Attribute, Html, a, button, div, img, input, p, span, text)
-import Html.Attributes exposing (checked, height, href, property, src, style, target, title, type_)
+import Html exposing (Attribute, Html, a, div, hr, img, input, p, span, text)
+import Html.Attributes exposing (checked, disabled, height, href, property, src, style, target, title, type_)
 import Html.Events exposing (onClick)
 import Http
 import Json.Decode as JD exposing (Decoder)
@@ -26,6 +26,7 @@ type alias Model =
     , lastSwapTime : Int
     , visibility : Visibility
     , switchEnabled : Bool
+    , showControls : Bool
     , started : Started
     , funnelState : State
     }
@@ -35,6 +36,7 @@ type alias SavedModel =
     { sources : List String
     , src : String
     , switchEnabled : Bool
+    , showControls : Bool
     }
 
 
@@ -52,6 +54,7 @@ modelToSavedModel model =
     { sources = model.sources
     , src = model.src
     , switchEnabled = model.switchEnabled
+    , showControls = model.showControls
     }
 
 
@@ -61,6 +64,7 @@ savedModelToModel savedModel model =
         | sources = savedModel.sources
         , src = savedModel.src
         , switchEnabled = savedModel.switchEnabled
+        , showControls = savedModel.showControls
     }
 
 
@@ -70,6 +74,7 @@ savedModelDecoder =
         |> required "sources" (JD.list JD.string)
         |> required "src" JD.string
         |> required "switchEnabled" JD.bool
+        |> optional "showControls" JD.bool False
 
 
 encodeSavedModel : SavedModel -> Value
@@ -78,6 +83,7 @@ encodeSavedModel savedModel =
         [ ( "sources", JE.list (\s -> JE.string s) savedModel.sources )
         , ( "src", JE.string savedModel.src )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
+        , ( "showControls", JE.bool savedModel.showControls )
         ]
 
 
@@ -90,6 +96,7 @@ init =
       , lastSwapTime = 0
       , visibility = Visible
       , switchEnabled = True
+      , showControls = False
       , started = NotStarted
       , funnelState = initialFunnelState
       }
@@ -153,6 +160,7 @@ type Msg
     | SetVisible Visibility
     | OnKeyPress Bool String
     | ToggleSwitchEnabled
+    | ToggleControls
     | Process Value
 
 
@@ -246,6 +254,10 @@ updateInternal msg model =
 
         ToggleSwitchEnabled ->
             ( { model | switchEnabled = not model.switchEnabled }, Cmd.none )
+
+        ToggleControls ->
+            { model | showControls = not model.showControls }
+                |> withNoCmd
 
         GotIndex result ->
             case result of
@@ -621,15 +633,57 @@ viewInternal model =
             , p []
                 [ text "Copyright "
                 , text special.copyright
-                , text " 2024, "
+                , text "2024, "
                 , a
                     [ href "https://billstclair.com/"
                     , target "_blank"
                     ]
                     [ text "Bill St. Clair" ]
                 ]
+            , br
+            , button ToggleControls <|
+                if model.showControls then
+                    "Hide Controls"
+
+                else
+                    "Show Controls"
+            , if model.showControls then
+                p []
+                    [ hr [] []
+                    , viewControls model
+                    ]
+
+              else
+                text ""
             ]
         ]
+
+
+viewControls : Model -> Html Msg
+viewControls model =
+    text "Controls"
+
+
+titledButton : String -> Bool -> Msg -> String -> Html Msg
+titledButton theTitle enabled msg label =
+    Html.button
+        [ onClick msg
+        , disabled <| not enabled
+        , title theTitle
+        , style "border-radius" "9999px"
+        , style "border-width" "1px"
+        ]
+        [ b label ]
+
+
+enabledButton : Bool -> Msg -> String -> Html Msg
+enabledButton =
+    titledButton ""
+
+
+button : Msg -> String -> Html Msg
+button =
+    enabledButton True
 
 
 stringFromCode : Int -> String
