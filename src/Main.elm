@@ -209,26 +209,28 @@ updateInternal msg model =
             let
                 millis =
                     Time.posixToMillis posix
+
+                lastSwapTime =
+                    model.lastSwapTime
             in
             let
                 m =
                     { model
                         | time = millis
                         , lastSwapTime =
-                            if model.lastSwapTime == 0 then
+                            if lastSwapTime == 0 then
                                 millis
 
                             else
-                                model.lastSwapTime
+                                lastSwapTime
                     }
             in
             if
                 (m.visibility == Visible)
                     && m.switchEnabled
-                    && (m.lastSwapTime /= 0)
-                    && (millis >= m.lastSwapTime + swapInterval)
+                    && (millis >= lastSwapTime + swapInterval)
             then
-                ( nextImage m, Cmd.none )
+                ( nextImage { m | lastSwapTime = millis }, Cmd.none )
 
             else
                 ( m, Cmd.none )
