@@ -226,18 +226,23 @@ updateInternal msg model =
                 model |> withNoCmd
 
             else
-                let
-                    k =
-                        Debug.log "KeyDown" key
-                in
-                if List.member k [ "ArrowLeft", "j", "J", "s", "S" ] then
-                    prevImage model |> withNoCmd
+            --let
+            --k =
+            --    Debug.log "KeyDown" key
+            --in
+            if
+                List.member key [ "ArrowLeft", "j", "J", "s", "S" ]
+            then
+                prevImage model |> withNoCmd
 
-                else if List.member k [ "ArrowRight", "l", "k", "f", "F" ] then
-                    nextImage model |> withNoCmd
+            else if List.member key [ "ArrowRight", "l", "k", "f", "F" ] then
+                nextImage model |> withNoCmd
 
-                else
-                    model |> withNoCmd
+            else if key >= "0" && key <= "9" then
+                digitKey key model |> withNoCmd
+
+            else
+                model |> withNoCmd
 
         ToggleSwitchEnabled ->
             ( { model | switchEnabled = not model.switchEnabled }, Cmd.none )
@@ -410,6 +415,25 @@ centerFit =
     ]
 
 
+digitKey : String -> Model -> Model
+digitKey digit model =
+    let
+        index =
+            case String.toInt digit of
+                Just i ->
+                    i
+
+                Nothing ->
+                    0
+    in
+    case LE.getAt index model.sources of
+        Just src ->
+            { model | src = src }
+
+        Nothing ->
+            model
+
+
 nextImage : Model -> Model
 nextImage model =
     viewImage model
@@ -444,7 +468,7 @@ viewImage model index =
             List.length sources
 
         idx =
-            if Debug.log "viewImage" index < 0 then
+            if index < 0 then
                 size - 1
 
             else if index >= size then
@@ -533,12 +557,23 @@ viewInternal model =
             []
         , br
         , let
+            index =
+                case LE.elemIndex model.src model.sources of
+                    Just i ->
+                        i
+
+                    Nothing ->
+                        0
+          in
+          text <| String.fromInt index
+        , text ": "
+        , let
             name =
                 getNameFromFileName model.src
           in
           text name
         , p []
-            [ text "Click on the image to change. Or press s/f, j/l or arrows."
+            [ text "Click on the image to change. Or press s/f, j/l, digit, or arrows."
             , br
             , checkBox ToggleSwitchEnabled
                 model.switchEnabled
