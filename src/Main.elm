@@ -590,7 +590,7 @@ viewInternal model =
         , text name
         , p []
             (List.indexedMap
-                (\idx _ ->
+                (\idx url ->
                     let
                         idxstr =
                             String.fromInt idx
@@ -600,20 +600,26 @@ viewInternal model =
                             , text idxstr
                             , text special.nbsp
                             ]
+
+                        idxName =
+                            getNameFromFileName url
                     in
                     if idx == index then
-                        span [] <|
+                        span [ title idxName ] <|
                             idxElements
                                 ++ [ text " " ]
 
                     else
-                        a
-                            [ href "#"
-                            , onClick <| OnKeyPress True idxstr
-                            , style "text-decoration" "none"
-                            ]
-                            [ span [ style "text-decoration" "underline" ]
-                                idxElements
+                        span []
+                            [ a
+                                [ href "#"
+                                , onClick <| OnKeyPress True idxstr
+                                , style "text-decoration" "none"
+                                , title idxName
+                                ]
+                                [ span [ style "text-decoration" "underline" ]
+                                    idxElements
+                                ]
                             , text " "
                             ]
                 )
