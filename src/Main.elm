@@ -544,6 +544,18 @@ view model =
 
 viewInternal : Model -> Html Msg
 viewInternal model =
+    let
+        name =
+            getNameFromFileName model.src
+
+        index =
+            case LE.elemIndex model.src model.sources of
+                Just i ->
+                    i
+
+                Nothing ->
+                    0
+    in
     div [ style "text-align" "center" ]
         [ img
             (List.concat
@@ -556,24 +568,40 @@ viewInternal model =
             )
             []
         , br
-        , let
-            index =
-                case LE.elemIndex model.src model.sources of
-                    Just i ->
-                        i
-
-                    Nothing ->
-                        0
-          in
-          text <| String.fromInt index
-        , text ": "
-        , let
-            name =
-                getNameFromFileName model.src
-          in
-          text name
+        , text name
         , p []
-            [ text "Click on the image to change. Or press s/f, j/l, digit, or arrows."
+            (List.indexedMap
+                (\idx _ ->
+                    let
+                        idxstr =
+                            String.fromInt idx
+
+                        idxElements =
+                            [ text special.nbsp
+                            , text idxstr
+                            , text special.nbsp
+                            ]
+                    in
+                    if idx == index then
+                        span [] <|
+                            idxElements
+                                ++ [ text " " ]
+
+                    else
+                        a
+                            [ href "#"
+                            , onClick (OnKeyPress True idxstr)
+                            , style "text-decoration" "none"
+                            ]
+                            [ span [ style "text-decoration" "underline" ]
+                                idxElements
+                            , text " "
+                            ]
+                )
+                model.sources
+            )
+        , p []
+            [ text "Click on the image to change. Or press s/f, j/l, digit, arrows, or digit links above."
             , br
             , checkBox ToggleSwitchEnabled
                 model.switchEnabled
@@ -592,6 +620,23 @@ viewInternal model =
                 [ text "Stoneder.club" ]
             ]
         ]
+
+
+stringFromCode : Int -> String
+stringFromCode code =
+    String.fromList [ Char.fromCode code ]
+
+
+special =
+    { nbsp = stringFromCode 160 -- \u00A0
+    , copyright = stringFromCode 169 -- \u00A9
+    , biohazard = stringFromCode 9763 -- \u2623
+    , black_star = stringFromCode 10036 -- \u2734
+    , hourglass = stringFromCode 8987 -- \u231B
+    , hourglass_flowing = stringFromCode 9203 -- \u23F3
+    , checkmark = stringFromCode 10003 -- \u2713
+    , middleDot = stringFromCode 183 -- \u00B7
+    }
 
 
 titledCheckBox : String -> Msg -> Bool -> String -> Html Msg
