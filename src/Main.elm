@@ -1,5 +1,12 @@
 module Main exposing (main)
 
+{-| TODO:
+
+Write code for editing the sources.
+Merge with `site/index.json` if `mergeWithImageIndex` is true.
+
+-}
+
 import Browser
 import Browser.Events as Events exposing (Visibility(..))
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
