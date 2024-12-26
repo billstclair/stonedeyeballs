@@ -590,7 +590,7 @@ viewInternal model =
                     else
                         a
                             [ href "#"
-                            , onClick (OnKeyPress True idxstr)
+                            , onClick <| OnKeyPress True idxstr
                             , style "text-decoration" "none"
                             ]
                             [ span [ style "text-decoration" "underline" ]
