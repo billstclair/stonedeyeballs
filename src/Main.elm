@@ -2,7 +2,7 @@ module Main exposing (main)
 
 {-| TODO:
 
-Do editing of url strings in controls.
+Editing of url strings in controls.
 
 Add save/restore area for lists of urls.
 
