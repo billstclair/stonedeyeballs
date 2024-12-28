@@ -33,6 +33,7 @@ type alias Model =
     , editingSrc : String
     , time : Int
     , lastSwapTime : Int
+    , reallyDeleteState : Bool
     , visibility : Visibility
     , switchEnabled : Bool
     , showControls : Bool
@@ -126,6 +127,7 @@ init =
       , editingSrc = ""
       , time = 0
       , lastSwapTime = 0
+      , reallyDeleteState = False
       , visibility = Visible
       , switchEnabled = True
       , showControls = False
@@ -133,10 +135,7 @@ init =
       , started = NotStarted
       , funnelState = initialFunnelState
       }
-    , Http.get
-        { url = "images/index.json"
-        , expect = Http.expectJson GotIndex (JD.list JD.string)
-        }
+    , Cmd.none
     )
 
 
@@ -167,6 +166,11 @@ getLabeled label key =
 listKeysLabeled : String -> String -> Cmd Msg
 listKeysLabeled label prefix =
     localStorageSend (LocalStorage.listKeysLabeled label prefix)
+
+
+clearKeys : String -> Cmd Msg
+clearKeys prefix =
+    localStorageSend (LocalStorage.clear prefix)
 
 
 localStoragePrefix : String
@@ -201,6 +205,7 @@ type Msg
     | DisplayEditingSrc
     | SaveRestoreEditingSources Bool
     | DeleteAllEditingSources
+    | DeleteState
     | Process Value
 
 
@@ -217,11 +222,20 @@ update msg model =
                 ReceiveTime _ ->
                     False
 
+                DeleteState ->
+                    False
+
+                Process _ ->
+                    False
+
+                GotIndex _ ->
+                    False
+
                 _ ->
                     True
 
         ( mdl, cmd ) =
-            updateInternal msg model
+            updateInternal doUpdate msg model
     in
     if doUpdate && mdl.started == Started then
         mdl
@@ -232,15 +246,22 @@ update msg model =
         mdl |> withCmd cmd
 
 
-updateInternal : Msg -> Model -> ( Model, Cmd Msg )
-updateInternal msg modelIn =
+updateInternal : Bool -> Msg -> Model -> ( Model, Cmd Msg )
+updateInternal doUpdate msg modelIn =
     let
-        model =
-            if modelIn.editingSources == [] then
-                { modelIn | editingSources = modelIn.sources }
+        modelIn1 =
+            if msg == DeleteState || not doUpdate then
+                modelIn
 
             else
-                modelIn
+                { modelIn | reallyDeleteState = False }
+
+        model =
+            if modelIn1.editingSources == [] then
+                { modelIn1 | editingSources = modelIn1.sources }
+
+            else
+                modelIn1
     in
     case msg of
         MouseDown ->
@@ -360,6 +381,24 @@ updateInternal msg modelIn =
         DeleteAllEditingSources ->
             { model | editingSources = [ "" ] }
                 |> withNoCmd
+
+        DeleteState ->
+            if model.reallyDeleteState then
+                let
+                    ( mdl, cmd ) =
+                        init
+                in
+                { mdl
+                    | reallyDeleteState = False
+                    , started = Started
+                    , editingSources = []
+                    , editingSrc = ""
+                }
+                    |> withCmds [ cmd, clearKeys "", getIndexJson 0 ]
+
+            else
+                { model | reallyDeleteState = True }
+                    |> withNoCmd
 
         GotIndex result ->
             case result of
@@ -523,6 +562,21 @@ handleGetResponse maybeLabel key maybeValue model =
                     model |> withNoCmd
 
 
+getIndexJson : a -> Cmd Msg
+getIndexJson _ =
+    let
+        s =
+            Debug.log "getIndexJson" 0
+    in
+    Http.get
+        { url = "images/index.json"
+        , expect =
+            Http.expectJson
+                GotIndex
+                (JD.list JD.string)
+        }
+
+
 handleGetModel : Maybe Value -> Model -> ( Model, Cmd Msg )
 handleGetModel maybeValue model =
     let
@@ -534,7 +588,11 @@ handleGetModel maybeValue model =
     in
     case maybeValue of
         Nothing ->
-            model2 |> withNoCmd
+            let
+                s =
+                    Debug.log "null model value, getIndexJson" 0
+            in
+            model2 |> withCmd (getIndexJson 0)
 
         Just value ->
             case JD.decodeValue savedModelDecoder value of
@@ -545,7 +603,7 @@ handleGetModel maybeValue model =
                                 Debug.log "Error decoding SavedModel"
                                     (JD.errorToString err)
                     }
-                        |> withNoCmd
+                        |> withCmd (getIndexJson 0)
 
                 Ok savedModel ->
                     savedModelToModel savedModel model2
@@ -847,6 +905,13 @@ viewControls model =
                     "Restore"
                 ]
             , viewEditingSources model
+            , p []
+                [ if model.reallyDeleteState then
+                    button DeleteState "Really Delete State"
+
+                  else
+                    button DeleteState "Delete State (after confirmation)"
+                ]
             ]
         ]
 
