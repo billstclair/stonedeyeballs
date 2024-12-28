@@ -8,6 +8,8 @@ Add save/restore area for lists of urls.
 
 Merge with `site/index.json` if `mergeWithImageIndex` is true.
 
+Switch delay, in seconds, floating.
+
 -}
 
 import Browser
