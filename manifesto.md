@@ -1,0 +1,1 @@
+/Users/billstclair/arbitrage/manifesto.md

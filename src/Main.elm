@@ -112,11 +112,16 @@ encodeSavedModel savedModel =
         ]
 
 
+stonedEyeballsUrl : String
+stonedEyeballsUrl =
+    "stoned-eyeballs.jpg"
+
+
 init : ( Model, Cmd Msg )
 init =
     ( { err = Nothing
-      , sources = [ "stoned-eyeballs.jpg" ]
-      , src = "stoned-eyeballs.jpg"
+      , sources = [ stonedEyeballsUrl ]
+      , src = stonedEyeballsUrl
       , editingSources = []
       , editingSrc = ""
       , time = 0
@@ -193,7 +198,8 @@ type Msg
     | SelectEditingSrc String
     | AddEditingSrc
     | DeleteEditingSrc
-    | EditEditingSrc
+    | DisplayEditingSrc
+    | SaveRestoreEditingSources Bool
     | Process Value
 
 
@@ -226,7 +232,15 @@ update msg model =
 
 
 updateInternal : Msg -> Model -> ( Model, Cmd Msg )
-updateInternal msg model =
+updateInternal msg modelIn =
+    let
+        model =
+            if modelIn.editingSources == [] then
+                { modelIn | editingSources = modelIn.sources }
+
+            else
+                modelIn
+    in
     case msg of
         MouseDown ->
             ( nextImage model, Cmd.none )
@@ -303,13 +317,36 @@ updateInternal msg model =
                 |> withNoCmd
 
         AddEditingSrc ->
-            model |> withNoCmd
+            let
+                ( head, tail ) =
+                    headTail model.editingSrc model.editingSources
+            in
+            { model
+                | editingSources = head ++ [ "" ] ++ tail
+                , editingSrc = ""
+            }
+                |> withNoCmd
 
         DeleteEditingSrc ->
-            model |> withNoCmd
+            { model
+                | editingSources =
+                    Debug.log "DeleteEditingSrc, sources:" <|
+                        List.filter (\s -> s /= model.editingSrc) model.editingSources
+            }
+                |> withNoCmd
 
-        EditEditingSrc ->
-            model |> withNoCmd
+        DisplayEditingSrc ->
+            { model | src = model.editingSrc }
+                |> withNoCmd
+
+        SaveRestoreEditingSources savep ->
+            if savep then
+                { model | sources = model.editingSources }
+                    |> withNoCmd
+
+            else
+                { model | editingSources = model.sources }
+                    |> withNoCmd
 
         GotIndex result ->
             case result of
@@ -334,6 +371,38 @@ updateInternal msg model =
 
                 Ok res ->
                     res
+
+
+cdr : List a -> List a
+cdr list =
+    case List.tail list of
+        Just tail ->
+            tail
+
+        Nothing ->
+            []
+
+
+dropN : Int -> List a -> List a
+dropN n list =
+    if n <= 0 then
+        list
+
+    else
+        dropN (n - 1) <| cdr list
+
+
+headTail : String -> List String -> ( List String, List String )
+headTail editingSrc editingSources =
+    let
+        head =
+            LE.takeWhile (\a -> a /= editingSrc) editingSources
+                ++ [ editingSrc ]
+
+        tail =
+            dropN (List.length head) editingSources
+    in
+    ( head, tail )
 
 
 {-| The `model` parameter is necessary here for `PortFunnels.makeFunnelDict`.
@@ -558,7 +627,7 @@ nextElement strings string =
                     s
 
                 Nothing ->
-                    "stoned-eyeballs.jpg"
+                    stonedEyeballsUrl
 
         Just index ->
             let
@@ -574,7 +643,7 @@ nextElement strings string =
                     s
 
                 Nothing ->
-                    "stoned-eyeballs.jpg"
+                    stonedEyeballsUrl
 
 
 getNameFromFileName : String -> String
@@ -745,6 +814,13 @@ viewControls model =
                     model.mergeEditingSources
                     "Merge new app images with your list."
                 ]
+            , p []
+                [ button (SaveRestoreEditingSources True)
+                    "Save"
+                , text " "
+                , button (SaveRestoreEditingSources False)
+                    "Restore"
+                ]
             , viewEditingSources model
             ]
         ]
@@ -758,8 +834,8 @@ viewEditingSources model =
                 [] ->
                     model.sources
 
-                _ ->
-                    []
+                s ->
+                    s
     in
     span []
         [ table [ class "prettytable" ] <|
@@ -774,7 +850,7 @@ viewEditingSources model =
                                         , text " "
                                         , button DeleteEditingSrc "Delete"
                                         , text " "
-                                        , button EditEditingSrc "Edit"
+                                        , button DisplayEditingSrc "Display"
                                         , text " "
                                         ]
 
@@ -785,7 +861,7 @@ viewEditingSources model =
                             ]
                         ]
                 )
-                model.sources
+                sources
         ]
 
 
