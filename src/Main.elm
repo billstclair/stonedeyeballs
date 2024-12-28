@@ -269,7 +269,7 @@ updateInternal msg modelIn =
             if
                 (m.visibility == Visible)
                     && m.switchEnabled
-                    && (millis >= lastSwapTime + swapInterval)
+                    && (millis >= m.lastSwapTime + swapInterval)
             then
                 ( nextImage { m | lastSwapTime = millis }, Cmd.none )
 
@@ -314,7 +314,10 @@ updateInternal msg modelIn =
                 |> withNoCmd
 
         SelectEditingSrc src ->
-            { model | editingSrc = Debug.log "SelectEditingSrc" src }
+            { model
+                | editingSrc = Debug.log "SelectEditingSrc" src
+                , src = src
+            }
                 |> withNoCmd
 
         AddEditingSrc ->
@@ -864,8 +867,14 @@ viewEditingSources model =
                                         , text " "
                                         , button DeleteEditingSrc "Delete"
                                         , text " "
-                                        , button DisplayEditingSrc "Display"
-                                        , text " "
+                                        , if model.src /= model.editingSrc then
+                                            span []
+                                                [ button DisplayEditingSrc "Display"
+                                                , text " "
+                                                ]
+
+                                          else
+                                            text ""
                                         ]
 
                                   else

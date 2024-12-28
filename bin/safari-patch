@@ -4,6 +4,8 @@
 # regexp and replace form from:
 # https://twitter.com/janiczek/status/1456531723408269312
 
+echo "running safari-patch"
+
 if [[ -z `which rexreplace` ]]; then
   npm install -g rexreplace
 fi
