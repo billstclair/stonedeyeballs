@@ -190,6 +190,10 @@ type Msg
     | ToggleSwitchEnabled
     | ToggleControls
     | ToggleMergeEditingSources
+    | SelectEditingSrc String
+    | AddEditingSrc
+    | DeleteEditingSrc
+    | EditEditingSrc
     | Process Value
 
 
@@ -293,6 +297,19 @@ updateInternal msg model =
         ToggleMergeEditingSources ->
             { model | mergeEditingSources = not model.mergeEditingSources }
                 |> withNoCmd
+
+        SelectEditingSrc src ->
+            { model | editingSrc = Debug.log "SelectEditingSrc" src }
+                |> withNoCmd
+
+        AddEditingSrc ->
+            model |> withNoCmd
+
+        DeleteEditingSrc ->
+            model |> withNoCmd
+
+        EditEditingSrc ->
+            model |> withNoCmd
 
         GotIndex result ->
             case result of
@@ -746,7 +763,28 @@ viewEditingSources model =
     in
     span []
         [ table [ class "prettytable" ] <|
-            List.map (\s -> tr [] [ td [] [ text s ] ])
+            List.map
+                (\s ->
+                    tr []
+                        [ td []
+                            [ span [ onClick <| SelectEditingSrc s ]
+                                [ if s == model.editingSrc then
+                                    span []
+                                        [ button AddEditingSrc "Add"
+                                        , text " "
+                                        , button DeleteEditingSrc "Delete"
+                                        , text " "
+                                        , button EditEditingSrc "Edit"
+                                        , text " "
+                                        ]
+
+                                  else
+                                    text ""
+                                , text s
+                                ]
+                            ]
+                        ]
+                )
                 model.sources
         ]
 
