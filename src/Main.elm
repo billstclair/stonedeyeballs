@@ -408,7 +408,12 @@ updateInternal doUpdate msg modelIn =
                     )
 
                 Ok list ->
-                    ( { model | sources = Debug.log "sources" list }, Cmd.none )
+                    { model
+                        | sources =
+                            Debug.log "GotIndex, sources" list
+                        , editingSources = []
+                    }
+                        |> withNoCmd
 
         Process value ->
             case
