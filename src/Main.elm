@@ -11,8 +11,8 @@ import Browser
 import Browser.Events as Events exposing (Visibility(..))
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
-import Html exposing (Attribute, Html, a, div, hr, img, input, p, span, text)
-import Html.Attributes exposing (checked, disabled, height, href, property, src, style, target, title, type_)
+import Html exposing (Attribute, Html, a, div, hr, img, input, p, span, table, td, text, tr)
+import Html.Attributes exposing (checked, class, disabled, height, href, property, src, style, target, title, type_)
 import Html.Events exposing (onClick)
 import Http
 import Json.Decode as JD exposing (Decoder)
@@ -29,11 +29,14 @@ type alias Model =
     { err : Maybe String
     , sources : List String
     , src : String
+    , editingSources : List String
+    , editingSrc : String
     , time : Int
     , lastSwapTime : Int
     , visibility : Visibility
     , switchEnabled : Bool
     , showControls : Bool
+    , mergeEditingSources : Bool
     , started : Started
     , funnelState : State
     }
@@ -42,8 +45,11 @@ type alias Model =
 type alias SavedModel =
     { sources : List String
     , src : String
+    , editingSources : List String
+    , editingSrc : String
     , switchEnabled : Bool
     , showControls : Bool
+    , mergeEditingSources : Bool
     }
 
 
@@ -60,8 +66,11 @@ modelToSavedModel : Model -> SavedModel
 modelToSavedModel model =
     { sources = model.sources
     , src = model.src
+    , editingSources = model.editingSources
+    , editingSrc = model.editingSrc
     , switchEnabled = model.switchEnabled
     , showControls = model.showControls
+    , mergeEditingSources = model.mergeEditingSources
     }
 
 
@@ -70,8 +79,11 @@ savedModelToModel savedModel model =
     { model
         | sources = savedModel.sources
         , src = savedModel.src
+        , editingSources = savedModel.editingSources
+        , editingSrc = savedModel.editingSrc
         , switchEnabled = savedModel.switchEnabled
         , showControls = savedModel.showControls
+        , mergeEditingSources = savedModel.mergeEditingSources
     }
 
 
@@ -80,8 +92,11 @@ savedModelDecoder =
     JD.succeed SavedModel
         |> required "sources" (JD.list JD.string)
         |> required "src" JD.string
+        |> optional "editingSources" (JD.list JD.string) []
+        |> optional "editingSrc" JD.string ""
         |> required "switchEnabled" JD.bool
         |> optional "showControls" JD.bool False
+        |> optional "mergeEditingSources" JD.bool True
 
 
 encodeSavedModel : SavedModel -> Value
@@ -89,8 +104,11 @@ encodeSavedModel savedModel =
     JE.object
         [ ( "sources", JE.list (\s -> JE.string s) savedModel.sources )
         , ( "src", JE.string savedModel.src )
+        , ( "editingSources", JE.list (\s -> JE.string s) savedModel.editingSources )
+        , ( "editingSrc", JE.string savedModel.editingSrc )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
+        , ( "mergeEditingSources", JE.bool savedModel.mergeEditingSources )
         ]
 
 
@@ -99,11 +117,14 @@ init =
     ( { err = Nothing
       , sources = [ "stoned-eyeballs.jpg" ]
       , src = "stoned-eyeballs.jpg"
+      , editingSources = []
+      , editingSrc = ""
       , time = 0
       , lastSwapTime = 0
       , visibility = Visible
       , switchEnabled = True
       , showControls = False
+      , mergeEditingSources = True
       , started = NotStarted
       , funnelState = initialFunnelState
       }
@@ -168,6 +189,7 @@ type Msg
     | OnKeyPress Bool String
     | ToggleSwitchEnabled
     | ToggleControls
+    | ToggleMergeEditingSources
     | Process Value
 
 
@@ -266,6 +288,10 @@ updateInternal msg model =
 
         ToggleControls ->
             { model | showControls = not model.showControls }
+                |> withNoCmd
+
+        ToggleMergeEditingSources ->
+            { model | mergeEditingSources = not model.mergeEditingSources }
                 |> withNoCmd
 
         GotIndex result ->
@@ -554,6 +580,11 @@ getNameFromFileName filename =
     SE.toTitleCase res
 
 
+center : List (Attribute msg) -> List (Html msg) -> Html msg
+center =
+    Html.node "center"
+
+
 view : Model -> Html Msg
 view model =
     if model.started /= Started then
@@ -577,7 +608,10 @@ viewInternal model =
                 Nothing ->
                     0
     in
-    div [ style "text-align" "center" ]
+    div
+        [ style "text-align" "center"
+        , style "margin" "auto"
+        ]
         [ img
             (List.concat
                 [ centerFit
@@ -674,9 +708,47 @@ viewInternal model =
         ]
 
 
+h1 : String -> Html Msg
+h1 title =
+    Html.h1 [] [ text title ]
+
+
+h2 : String -> Html Msg
+h2 title =
+    Html.h2 [] [ text title ]
+
+
 viewControls : Model -> Html Msg
 viewControls model =
-    text "Controls"
+    center []
+        [ div []
+            [ h2 "Controls"
+            , p []
+                [ checkBox ToggleMergeEditingSources
+                    model.mergeEditingSources
+                    "Merge new app images with your list."
+                ]
+            , viewEditingSources model
+            ]
+        ]
+
+
+viewEditingSources : Model -> Html Msg
+viewEditingSources model =
+    let
+        sources =
+            case model.editingSources of
+                [] ->
+                    model.sources
+
+                _ ->
+                    []
+    in
+    span []
+        [ table [ class "prettytable" ] <|
+            List.map (\s -> tr [] [ td [] [ text s ] ])
+                model.sources
+        ]
 
 
 titledButton : String -> Bool -> Msg -> String -> Html Msg
