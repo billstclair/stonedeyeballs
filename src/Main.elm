@@ -231,13 +231,20 @@ update msg model =
                 GotIndex _ ->
                     False
 
+                SetVisible _ ->
+                    False
+
                 _ ->
                     True
 
         ( mdl, cmd ) =
             updateInternal doUpdate msg model
     in
-    if doUpdate && mdl.started == Started then
+    if doUpdate && mdl.started == Started && mdl /= model then
+        let
+            m =
+                Debug.log "update, msg" msg
+        in
         mdl
             |> withCmds
                 [ cmd, saveModel mdl ]
