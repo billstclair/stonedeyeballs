@@ -2,7 +2,10 @@ module Main exposing (main)
 
 {-| TODO:
 
-Write code for editing the sources.
+Do editing of url strings in controls.
+
+Add save/restore area for lists of urls.
+
 Merge with `site/index.json` if `mergeWithImageIndex` is true.
 
 -}
