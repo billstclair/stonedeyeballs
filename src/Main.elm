@@ -303,7 +303,12 @@ updateInternal msg modelIn =
                 model |> withNoCmd
 
         ToggleSwitchEnabled ->
-            ( { model | switchEnabled = not model.switchEnabled }, Cmd.none )
+            ( { model
+                | switchEnabled = not model.switchEnabled
+                , lastSwapTime = model.time
+              }
+            , Cmd.none
+            )
 
         ToggleControls ->
             { model | showControls = not model.showControls }
@@ -557,7 +562,7 @@ centerFit =
 
 
 digitKey : String -> Model -> Model
-digitKey digit model =
+digitKey digit modelIn =
     let
         index =
             case String.toInt digit of
@@ -566,6 +571,9 @@ digitKey digit model =
 
                 Nothing ->
                     0
+
+        model =
+            { modelIn | lastSwapTime = modelIn.time }
     in
     case LE.getAt index model.sources of
         Just src ->
