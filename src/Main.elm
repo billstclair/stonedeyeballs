@@ -200,6 +200,7 @@ type Msg
     | DeleteEditingSrc
     | DisplayEditingSrc
     | SaveRestoreEditingSources Bool
+    | DeleteAllEditingSources
     | Process Value
 
 
@@ -347,6 +348,10 @@ updateInternal msg modelIn =
             else
                 { model | editingSources = model.sources }
                     |> withNoCmd
+
+        DeleteAllEditingSources ->
+            { model | editingSources = [ "" ] }
+                |> withNoCmd
 
         GotIndex result ->
             case result of
@@ -814,11 +819,20 @@ viewControls model =
                     model.mergeEditingSources
                     "Merge new app images with your list."
                 ]
-            , p []
-                [ button (SaveRestoreEditingSources True)
+            , let
+                different =
+                    model.sources /= model.editingSources
+              in
+              p []
+                [ enabledButton different
+                    (SaveRestoreEditingSources True)
                     "Save"
                 , text " "
-                , button (SaveRestoreEditingSources False)
+                , button DeleteAllEditingSources
+                    "Delete all"
+                , text " "
+                , enabledButton different
+                    (SaveRestoreEditingSources False)
                     "Restore"
                 ]
             , viewEditingSources model
