@@ -17,8 +17,8 @@ import Browser.Events as Events exposing (Visibility(..))
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
 import Html exposing (Attribute, Html, a, div, hr, img, input, p, span, table, td, text, tr)
-import Html.Attributes exposing (checked, class, disabled, height, href, property, src, style, target, title, type_)
-import Html.Events exposing (onClick)
+import Html.Attributes exposing (checked, class, disabled, height, href, property, src, style, target, title, type_, value, width)
+import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as JD exposing (Decoder)
 import Json.Decode.Pipeline as DP exposing (custom, hardcoded, optional, required)
@@ -208,6 +208,7 @@ type Msg
     | AddEditingSrc
     | DeleteEditingSrc
     | DisplayEditingSrc
+    | InputEditingSrc String
     | SaveRestoreEditingSources Bool
     | DeleteAllEditingSources
     | DeleteState
@@ -380,6 +381,27 @@ updateInternal doUpdate msg modelIn =
         DisplayEditingSrc ->
             { model | src = model.editingSrc }
                 |> withNoCmd
+
+        InputEditingSrc editingSrc ->
+            case LE.elemIndex model.editingSrc model.editingSources of
+                Nothing ->
+                    { model
+                        | editingSrc = editingSrc
+                        , src = editingSrc
+                    }
+                        |> withNoCmd
+
+                Just editingSrcIdx ->
+                    let
+                        editingSources =
+                            LE.setAt editingSrcIdx editingSrc model.editingSources
+                    in
+                    { model
+                        | editingSrc = editingSrc
+                        , editingSources = editingSources
+                        , src = editingSrc
+                    }
+                        |> withNoCmd
 
         SaveRestoreEditingSources savep ->
             if savep then
@@ -784,6 +806,13 @@ viewInternal model =
 
                 Nothing ->
                     0
+
+        modelSrc =
+            if String.startsWith "http" model.src then
+                model.src
+
+            else
+                "images/" ++ model.src
     in
     div
         [ style "text-align" "center"
@@ -792,7 +821,7 @@ viewInternal model =
         [ img
             (List.concat
                 [ centerFit
-                , [ src <| "images/" ++ model.src
+                , [ src modelSrc
                   , style "text-align" "center"
                   , onClick MouseDown
                   ]
@@ -965,11 +994,28 @@ viewEditingSources model =
 
                                           else
                                             text ""
+                                        , input
+                                            [ onInput InputEditingSrc
+                                            , width 50
+                                            , value s
+                                            , style "min-height" "1em"
+                                            , style "min-width" "30em"
+                                            ]
+                                            [ text s ]
                                         ]
 
                                   else
-                                    text ""
-                                , text s
+                                    span
+                                        [ style "min-height" "1em"
+                                        , style "min-width" "30em"
+                                        ]
+                                        [ text <|
+                                            if s == "" then
+                                                special.nbsp
+
+                                            else
+                                                s
+                                        ]
                                 ]
                             ]
                         ]
