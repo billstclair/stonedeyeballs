@@ -12,6 +12,8 @@ Switch delay, in seconds, floating.
 
 -}
 
+-- import Browser.Events as Events exposing (Visibility(..))
+
 import Browser
 import Browser.Events as Events exposing (Visibility(..))
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
@@ -27,6 +29,7 @@ import List.Extra as LE
 import PortFunnel.LocalStorage as LocalStorage
 import PortFunnels exposing (FunnelDict, Handler(..), State)
 import String.Extra as SE
+import Task exposing (Task, succeed)
 import Time exposing (Posix)
 
 
@@ -368,7 +371,7 @@ updateInternal doUpdate msg modelIn =
                 | editingSources = head ++ [ "" ] ++ tail
                 , editingSrc = ""
             }
-                |> withNoCmd
+                |> withCmd (Task.perform SelectEditingSrc (succeed ""))
 
         DeleteEditingSrc ->
             { model
@@ -977,9 +980,9 @@ viewEditingSources model =
         [ table [ class "prettytable" ] <|
             List.map
                 (\s ->
-                    tr []
+                    tr [ onClick <| SelectEditingSrc s ]
                         [ td []
-                            [ span [ onClick <| SelectEditingSrc s ]
+                            [ span []
                                 [ if s == model.editingSrc then
                                     span []
                                         [ button AddEditingSrc "Add"
