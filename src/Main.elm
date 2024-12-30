@@ -348,9 +348,8 @@ updateInternal doUpdate msg modelIn =
 
             else if List.member key [ "ArrowRight", "l", "k", "f", "F" ] then
                 nextImage model |> withNoCmd
-
-            else if key >= "0" && key <= "9" then
-                digitKey key model |> withNoCmd
+                --            else if key >= "0" && key <= "9" then
+                --                digitKey key model |> withNoCmd
 
             else
                 model |> withNoCmd
@@ -1144,8 +1143,8 @@ subscriptions model =
         , Events.onKeyUp <| keyDecoder False
         , Time.every 100.0 ReceiveTime
         , PortFunnels.subscriptions Process model
+        , Events.onKeyDown <| keyDecoder True
 
-        --, Events.onKeyDown <| keyDecoder True
         --, Events.onMouseDown mouseDownDecoder
         ]
 
