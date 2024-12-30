@@ -28,6 +28,7 @@ import Json.Encode as JE exposing (Value)
 import List.Extra as LE
 import PortFunnel.LocalStorage as LocalStorage
 import PortFunnels exposing (FunnelDict, Handler(..), State)
+import Process
 import String.Extra as SE
 import Task exposing (Task, succeed)
 import Time exposing (Posix)
@@ -39,6 +40,7 @@ type alias Model =
     , src : String
     , editingSources : List String
     , editingSrc : String
+    , justAddedEditingRow : Bool
     , time : Int
     , lastSwapTime : Int
     , reallyDeleteState : Bool
@@ -139,6 +141,7 @@ init =
       , src = stonedEyeballsUrl
       , editingSources = []
       , editingSrc = ""
+      , justAddedEditingRow = False
       , time = 0
       , lastSwapTime = 0
       , reallyDeleteState = False
@@ -389,8 +392,10 @@ updateInternal doUpdate msg modelIn =
             { model
                 | editingSources = head ++ [ "" ] ++ tail
                 , editingSrc = ""
+                , justAddedEditingRow = True
             }
-                |> withCmd (Task.perform SelectEditingSrc (succeed ""))
+                |> withCmd
+                    (delay 0 <| SelectEditingSrc "")
 
         DeleteEditingSrc ->
             { model
@@ -405,6 +410,10 @@ updateInternal doUpdate msg modelIn =
                 |> withNoCmd
 
         InputEditingSrc editingSrc ->
+            let
+                _ =
+                    Debug.log "InputEditingSrc" editingSrc
+            in
             case LE.elemIndex model.editingSrc model.editingSources of
                 Nothing ->
                     { model
@@ -484,6 +493,12 @@ updateInternal doUpdate msg modelIn =
 
                 Ok res ->
                     res
+
+
+delay : Int -> msg -> Cmd msg
+delay millis msg =
+    Process.sleep (millis |> toFloat)
+        |> Task.perform (\_ -> msg)
 
 
 cdr : List a -> List a
