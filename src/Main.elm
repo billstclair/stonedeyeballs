@@ -40,6 +40,7 @@ type alias Model =
     , lastSwapTime : Int
     , reallyDeleteState : Bool
     , visibility : Visibility
+    , switchPeriod : Float
     , switchEnabled : Bool
     , showControls : Bool
     , mergeEditingSources : Bool
@@ -53,6 +54,7 @@ type alias SavedModel =
     , src : String
     , editingSources : List String
     , editingSrc : String
+    , switchPeriod : Float
     , switchEnabled : Bool
     , showControls : Bool
     , mergeEditingSources : Bool
@@ -74,6 +76,7 @@ modelToSavedModel model =
     , src = model.src
     , editingSources = model.editingSources
     , editingSrc = model.editingSrc
+    , switchPeriod = model.switchPeriod
     , switchEnabled = model.switchEnabled
     , showControls = model.showControls
     , mergeEditingSources = model.mergeEditingSources
@@ -87,6 +90,7 @@ savedModelToModel savedModel model =
         , src = savedModel.src
         , editingSources = savedModel.editingSources
         , editingSrc = savedModel.editingSrc
+        , switchPeriod = savedModel.switchPeriod
         , switchEnabled = savedModel.switchEnabled
         , showControls = savedModel.showControls
         , mergeEditingSources = savedModel.mergeEditingSources
@@ -100,6 +104,7 @@ savedModelDecoder =
         |> required "src" JD.string
         |> optional "editingSources" (JD.list JD.string) []
         |> optional "editingSrc" JD.string ""
+        |> optional "switchPeriod" JD.float 5
         |> required "switchEnabled" JD.bool
         |> optional "showControls" JD.bool False
         |> optional "mergeEditingSources" JD.bool True
@@ -112,6 +117,7 @@ encodeSavedModel savedModel =
         , ( "src", JE.string savedModel.src )
         , ( "editingSources", JE.list (\s -> JE.string s) savedModel.editingSources )
         , ( "editingSrc", JE.string savedModel.editingSrc )
+        , ( "switchPeriod", JE.float savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
         , ( "mergeEditingSources", JE.bool savedModel.mergeEditingSources )
@@ -134,6 +140,7 @@ init =
       , lastSwapTime = 0
       , reallyDeleteState = False
       , visibility = Visible
+      , switchPeriod = 5
       , switchEnabled = True
       , showControls = False
       , mergeEditingSources = True
@@ -201,6 +208,7 @@ type Msg
     | ReceiveTime Posix
     | SetVisible Visibility
     | OnKeyPress Bool String
+    | InputSwitchPeriod String
     | ToggleSwitchEnabled
     | ToggleControls
     | ToggleMergeEditingSources
@@ -215,9 +223,9 @@ type Msg
     | Process Value
 
 
-swapInterval : Int
-swapInterval =
-    5 * 1000
+swapInterval : Model -> Int
+swapInterval model =
+    model.switchPeriod * 1000 |> round
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -303,7 +311,7 @@ updateInternal doUpdate msg modelIn =
             if
                 (m.visibility == Visible)
                     && m.switchEnabled
-                    && (millis >= m.lastSwapTime + swapInterval)
+                    && (millis >= m.lastSwapTime + swapInterval m)
             then
                 ( nextImage { m | lastSwapTime = millis }, Cmd.none )
 
@@ -335,6 +343,19 @@ updateInternal doUpdate msg modelIn =
 
             else
                 model |> withNoCmd
+
+        InputSwitchPeriod string ->
+            let
+                period =
+                    case String.toFloat string of
+                        Just s ->
+                            max 1 s
+
+                        Nothing ->
+                            5
+            in
+            { model | switchPeriod = period }
+                |> withNoCmd
 
         ToggleSwitchEnabled ->
             ( { model
@@ -873,6 +894,19 @@ viewInternal model =
             , checkBox ToggleSwitchEnabled
                 model.switchEnabled
                 "Auto-switch images"
+            , b ", period: "
+            , let
+                str =
+                    String.fromFloat model.switchPeriod
+              in
+              input
+                [ onInput InputSwitchPeriod
+                , value str
+                , width 2
+                , style "min-height" "1em"
+                , style "width" "2em"
+                ]
+                [ text str ]
             , br
             , a
                 [ href "https://github.com/billstclair/stonedeyeballs"
