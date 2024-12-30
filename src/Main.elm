@@ -43,7 +43,7 @@ type alias Model =
     , lastSwapTime : Int
     , reallyDeleteState : Bool
     , visibility : Visibility
-    , switchPeriod : Float
+    , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
     , mergeEditingSources : Bool
@@ -57,7 +57,7 @@ type alias SavedModel =
     , src : String
     , editingSources : List String
     , editingSrc : String
-    , switchPeriod : Float
+    , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
     , mergeEditingSources : Bool
@@ -107,7 +107,7 @@ savedModelDecoder =
         |> required "src" JD.string
         |> optional "editingSources" (JD.list JD.string) []
         |> optional "editingSrc" JD.string ""
-        |> optional "switchPeriod" JD.float 5
+        |> optional "switchPeriod" JD.string "5"
         |> required "switchEnabled" JD.bool
         |> optional "showControls" JD.bool False
         |> optional "mergeEditingSources" JD.bool True
@@ -120,7 +120,7 @@ encodeSavedModel savedModel =
         , ( "src", JE.string savedModel.src )
         , ( "editingSources", JE.list (\s -> JE.string s) savedModel.editingSources )
         , ( "editingSrc", JE.string savedModel.editingSrc )
-        , ( "switchPeriod", JE.float savedModel.switchPeriod )
+        , ( "switchPeriod", JE.string savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
         , ( "mergeEditingSources", JE.bool savedModel.mergeEditingSources )
@@ -143,7 +143,7 @@ init =
       , lastSwapTime = 0
       , reallyDeleteState = False
       , visibility = Visible
-      , switchPeriod = 5
+      , switchPeriod = "5"
       , switchEnabled = True
       , showControls = False
       , mergeEditingSources = True
@@ -228,7 +228,15 @@ type Msg
 
 swapInterval : Model -> Int
 swapInterval model =
-    model.switchPeriod * 1000 |> round
+    (case String.toFloat model.switchPeriod of
+        Just f ->
+            max 1 f
+
+        Nothing ->
+            5
+    )
+        * 1000
+        |> round
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -348,16 +356,7 @@ updateInternal doUpdate msg modelIn =
                 model |> withNoCmd
 
         InputSwitchPeriod string ->
-            let
-                period =
-                    case String.toFloat string of
-                        Just s ->
-                            max 1 s
-
-                        Nothing ->
-                            5
-            in
-            { model | switchPeriod = period }
+            { model | switchPeriod = string }
                 |> withNoCmd
 
         ToggleSwitchEnabled ->
@@ -898,18 +897,14 @@ viewInternal model =
                 model.switchEnabled
                 "Auto-switch images"
             , b ", period: "
-            , let
-                str =
-                    String.fromFloat model.switchPeriod
-              in
-              input
+            , input
                 [ onInput InputSwitchPeriod
-                , value str
+                , value model.switchPeriod
                 , width 2
                 , style "min-height" "1em"
                 , style "width" "2em"
                 ]
-                [ text str ]
+                [ text model.switchPeriod ]
             , br
             , a
                 [ href "https://github.com/billstclair/stonedeyeballs"
@@ -1146,11 +1141,11 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Events.onVisibilityChange SetVisible
-        , Events.onKeyDown <| keyDecoder True
         , Events.onKeyUp <| keyDecoder False
         , Time.every 100.0 ReceiveTime
         , PortFunnels.subscriptions Process model
 
+        --, Events.onKeyDown <| keyDecoder True
         --, Events.onMouseDown mouseDownDecoder
         ]
 
