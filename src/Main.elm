@@ -209,7 +209,8 @@ localStorageSend message =
 
 
 type Msg
-    = GotIndex (Result Http.Error (List String))
+    = Noop
+    | GotIndex (Result Http.Error (List String))
     | MouseDown
     | ReceiveTime Posix
     | SetVisible Visibility
@@ -265,8 +266,16 @@ update msg model =
                 _ ->
                     True
 
+        preserveJustAddedEditingRow =
+            case msg of
+                InputEditingSrc _ ->
+                    True
+
+                _ ->
+                    False
+
         ( mdl, cmd ) =
-            updateInternal doUpdate msg model
+            updateInternal doUpdate preserveJustAddedEditingRow msg model
     in
     if doUpdate && mdl.started == Started && mdl /= model then
         let
@@ -281,8 +290,8 @@ update msg model =
         mdl |> withCmd cmd
 
 
-updateInternal : Bool -> Msg -> Model -> ( Model, Cmd Msg )
-updateInternal doUpdate msg modelIn =
+updateInternal : Bool -> Bool -> Msg -> Model -> ( Model, Cmd Msg )
+updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
     let
         modelIn1 =
             if msg == DeleteState || not doUpdate then
@@ -291,12 +300,19 @@ updateInternal doUpdate msg modelIn =
             else
                 { modelIn | reallyDeleteState = False }
 
-        model =
-            if modelIn1.editingSources == [] then
-                { modelIn1 | editingSources = modelIn1.sources }
+        modelIn2 =
+            if not preserveJustAddedEditingRow then
+                { modelIn1 | justAddedEditingRow = False }
 
             else
                 modelIn1
+
+        model =
+            if modelIn2.editingSources == [] then
+                { modelIn2 | editingSources = modelIn2.sources }
+
+            else
+                modelIn2
     in
     case msg of
         MouseDown ->
@@ -464,6 +480,9 @@ updateInternal doUpdate msg modelIn =
             else
                 { model | reallyDeleteState = True }
                     |> withNoCmd
+
+        Noop ->
+            model |> withNoCmd
 
         GotIndex result ->
             case result of
@@ -1023,7 +1042,14 @@ viewEditingSources model =
         [ table [ class "prettytable" ] <|
             List.map
                 (\s ->
-                    tr [ onClick <| SelectEditingSrc s ]
+                    tr
+                        [ onClick <|
+                            if not model.justAddedEditingRow then
+                                SelectEditingSrc s
+
+                            else
+                                Noop
+                        ]
                         [ td []
                             [ span []
                                 [ if s == model.editingSrc then
