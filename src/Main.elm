@@ -36,9 +36,9 @@ import Time exposing (Posix)
 
 type alias Model =
     { err : Maybe String
-    , sources : List String
+    , sources : List ( String, Maybe String )
     , src : String
-    , editingSources : List String
+    , editingSources : List ( String, Maybe String )
     , editingSrc : String
     , justAddedEditingRow : Bool
     , time : Int
@@ -55,9 +55,9 @@ type alias Model =
 
 
 type alias SavedModel =
-    { sources : List String
+    { sources : List ( String, Maybe String )
     , src : String
-    , editingSources : List String
+    , editingSources : List ( String, Maybe String )
     , editingSrc : String
     , switchPeriod : String
     , switchEnabled : Bool
@@ -104,10 +104,40 @@ savedModelToModel savedModel model =
 
 savedModelDecoder : Decoder SavedModel
 savedModelDecoder =
+    let
+        parseValueList : List Value -> Decoder (List ( String, Maybe String ))
+        parseValueList values =
+            let
+                loop : List Value -> List ( String, Maybe String ) -> Decoder (List ( String, Maybe String ))
+                loop valueTail res =
+                    case valueTail of
+                        [] ->
+                            JD.succeed (List.reverse res)
+
+                        v :: rest ->
+                            case JD.decodeValue pairDecoder v of
+                                Ok e ->
+                                    loop rest (e :: res)
+
+                                Err _ ->
+                                    JD.fail "foo"
+
+                pairDecoder : Decoder ( String, Maybe String )
+                pairDecoder =
+                    JD.field "s" JD.string
+                        |> JD.andThen
+                            (\s ->
+                                JD.field "mn" (JD.nullable JD.string)
+                                    |> JD.andThen
+                                        (\e -> JD.succeed ( s, e ))
+                            )
+            in
+            loop values []
+    in
     JD.succeed SavedModel
-        |> required "sources" (JD.list JD.string)
+        |> required "sources" sourcesDecoder
         |> required "src" JD.string
-        |> optional "editingSources" (JD.list JD.string) []
+        |> optional "editingSources" sourcesDecoder []
         |> optional "editingSrc" JD.string ""
         |> optional "switchPeriod" JD.string "5"
         |> required "switchEnabled" JD.bool
@@ -115,12 +145,51 @@ savedModelDecoder =
         |> optional "mergeEditingSources" JD.bool True
 
 
+sourcesDecoder : Decoder (List ( String, Maybe String ))
+sourcesDecoder =
+    JD.list <|
+        JD.oneOf
+            [ JD.string
+                |> JD.andThen (\s -> JD.succeed ( s, Nothing ))
+            , JD.value
+                |> JD.andThen
+                    (\v ->
+                        case JD.decodeValue (JD.field "s" JD.string) v of
+                            Err _ ->
+                                JD.fail "No s field"
+
+                            Ok s ->
+                                case JD.decodeValue (JD.field "mn" (JD.nullable JD.string)) v of
+                                    Err _ ->
+                                        JD.fail "No mn field"
+
+                                    Ok mn ->
+                                        JD.succeed ( s, mn )
+                    )
+            ]
+
+
+encodeSource : ( String, Maybe String ) -> Value
+encodeSource ( s, mn ) =
+    JE.object
+        [ ( "s", JE.string s )
+        , ( "mn"
+          , case mn of
+                Just n ->
+                    JE.string n
+
+                Nothing ->
+                    JE.null
+          )
+        ]
+
+
 encodeSavedModel : SavedModel -> Value
 encodeSavedModel savedModel =
     JE.object
-        [ ( "sources", JE.list (\s -> JE.string s) savedModel.sources )
+        [ ( "sources", JE.list encodeSource savedModel.sources )
         , ( "src", JE.string savedModel.src )
-        , ( "editingSources", JE.list (\s -> JE.string s) savedModel.editingSources )
+        , ( "editingSources", JE.list encodeSource savedModel.editingSources )
         , ( "editingSrc", JE.string savedModel.editingSrc )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
@@ -137,7 +206,7 @@ stonedEyeballsUrl =
 init : ( Model, Cmd Msg )
 init =
     ( { err = Nothing
-      , sources = [ stonedEyeballsUrl ]
+      , sources = [ ( stonedEyeballsUrl, Nothing ) ]
       , src = stonedEyeballsUrl
       , editingSources = []
       , editingSrc = ""
@@ -224,6 +293,7 @@ type Msg
     | DeleteEditingSrc
     | DisplayEditingSrc
     | InputEditingSrc String
+    | InputEditingName String
     | SaveRestoreEditingSources Bool
     | DeleteAllEditingSources
     | DeleteState
@@ -407,7 +477,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     headTail model.editingSrc model.editingSources
             in
             { model
-                | editingSources = head ++ [ "" ] ++ tail
+                | editingSources = head ++ [ ( "", Nothing ) ] ++ tail
                 , editingSrc = ""
                 , justAddedEditingRow = True
             }
@@ -418,7 +488,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model
                 | editingSources =
                     Debug.log "DeleteEditingSrc, sources:" <|
-                        List.filter (\s -> s /= model.editingSrc) model.editingSources
+                        List.filter (\( s, _ ) -> s /= model.editingSrc) model.editingSources
             }
                 |> withNoCmd
 
@@ -431,7 +501,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 _ =
                     Debug.log "InputEditingSrc" editingSrc
             in
-            case LE.elemIndex model.editingSrc model.editingSources of
+            case LE.findIndex (\( a, _ ) -> a == model.editingSrc) model.editingSources of
                 Nothing ->
                     { model
                         | editingSrc = editingSrc
@@ -450,6 +520,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                         , src = editingSrc
                     }
                         |> withNoCmd
+
+        InputEditingName name ->
+            -- TODO
+            model |> withNoCmd
 
         SaveRestoreEditingSources savep ->
             if savep then
@@ -540,17 +614,18 @@ dropN n list =
         dropN (n - 1) <| cdr list
 
 
-headTail : String -> List String -> ( List String, List String )
+headTail : String -> List ( String, Maybe String ) -> ( List ( String, Maybe String ), List ( String, Maybe String ) )
 headTail editingSrc editingSources =
     let
         head =
-            LE.takeWhile (\a -> a /= editingSrc) editingSources
-                ++ [ editingSrc ]
-
-        tail =
-            dropN (List.length head) editingSources
+            LE.takeWhile (\( a, _ ) -> a /= editingSrc) editingSources
     in
-    ( head, tail )
+    case dropN (List.length head) editingSources of
+        [ es ] ->
+            ( head ++ [ es ], [] )
+
+        es :: rest ->
+            ( head ++ [ es ], rest )
 
 
 {-| The `model` parameter is necessary here for `PortFunnels.makeFunnelDict`.
@@ -730,7 +805,7 @@ digitKey digit modelIn =
             { modelIn | lastSwapTime = modelIn.time }
     in
     case LE.getAt index model.sources of
-        Just src ->
+        Just ( src, _ ) ->
             { model | src = src }
 
         Nothing ->
@@ -740,7 +815,7 @@ digitKey digit modelIn =
 nextImage : Model -> Model
 nextImage model =
     viewImage model
-        (case LE.elemIndex model.src model.sources of
+        (case LE.findIndex (\( idx, _ ) -> idx == model.src) model.sources of
             Just idx ->
                 idx + 1
 
@@ -752,7 +827,7 @@ nextImage model =
 prevImage : Model -> Model
 prevImage model =
     viewImage model
-        (case LE.elemIndex model.src model.sources of
+        (case LE.findIndex (\( src, _ ) -> src == model.src) model.sources of
             Just idx ->
                 idx - 1
 
@@ -781,7 +856,7 @@ viewImage model index =
                 index
     in
     case LE.getAt idx sources of
-        Just s ->
+        Just ( s, _ ) ->
             { model | src = s }
 
         _ ->
@@ -857,8 +932,8 @@ viewInternal model =
             getNameFromFileName model.src
 
         index =
-            case LE.elemIndex model.src model.sources of
-                Just i ->
+            case LE.find (\src -> src == model.src) model.sources of
+                Just ( i, _ ) ->
                     i
 
                 Nothing ->
@@ -889,7 +964,7 @@ viewInternal model =
         , text name
         , p []
             (List.indexedMap
-                (\idx url ->
+                (\idx ( url, maybeName ) ->
                     let
                         idxstr =
                             String.fromInt idx
@@ -901,7 +976,12 @@ viewInternal model =
                             ]
 
                         idxName =
-                            getNameFromFileName url
+                            case maybeName of
+                                Just n ->
+                                    n
+
+                                Nothing ->
+                                    getNameFromFileName url
                     in
                     if idx == index then
                         span [ title idxName ] <|
@@ -1042,7 +1122,16 @@ viewEditingSources model =
     span []
         [ table [ class "prettytable" ] <|
             List.map
-                (\s ->
+                (\( s, maybeName ) ->
+                    let
+                        name =
+                            case maybeName of
+                                Just n ->
+                                    n
+
+                                Nothing ->
+                                    ""
+                    in
                     tr
                         [ onClick <|
                             if not model.justAddedEditingRow then
@@ -1075,6 +1164,16 @@ viewEditingSources model =
                                             , style "min-width" "30em"
                                             ]
                                             [ text s ]
+                                        , text " "
+                                        , input
+                                            [ onInput InputEditingName
+                                            , width 20
+                                            , value name
+                                            , style "min-height" "1em"
+                                            , style "min-width"
+                                            , "20em"
+                                            ]
+                                            [ text name ]
                                         ]
 
                                   else
