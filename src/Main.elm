@@ -214,7 +214,7 @@ type Msg
     | MouseDown
     | ReceiveTime Posix
     | SetVisible Visibility
-    | OnKeyPress Bool String
+    | OnKeyPress Bool Bool String
     | InputSwitchPeriod String
     | ToggleSwitchEnabled
     | ToggleControls
@@ -351,7 +351,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
         SetVisible v ->
             ( { model | visibility = Debug.log "visibility" v }, Cmd.none )
 
-        OnKeyPress isDown key ->
+        OnKeyPress isDown doDigits key ->
             if not isDown then
                 model |> withNoCmd
 
@@ -367,8 +367,9 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
             else if List.member key [ "ArrowRight", "l", "k", "f", "F" ] then
                 nextImage model |> withNoCmd
-                --            else if key >= "0" && key <= "9" then
-                --                digitKey key model |> withNoCmd
+
+            else if doDigits && key >= "0" && key <= "9" then
+                digitKey key model |> withNoCmd
 
             else
                 model |> withNoCmd
@@ -911,7 +912,7 @@ viewInternal model =
                         span []
                             [ a
                                 [ href "#"
-                                , onClick <| OnKeyPress True idxstr
+                                , onClick <| OnKeyPress True True idxstr
                                 , style "text-decoration" "none"
                                 , title idxName
                                 ]
@@ -1193,7 +1194,7 @@ subscriptions model =
 keyDecoder : Bool -> Decoder Msg
 keyDecoder keyDown =
     JD.field "key" JD.string
-        |> JD.map (OnKeyPress keyDown)
+        |> JD.map (OnKeyPress keyDown False)
 
 
 mouseDownDecoder : Decoder Msg
