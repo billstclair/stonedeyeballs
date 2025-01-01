@@ -34,11 +34,22 @@ import Task exposing (Task, succeed)
 import Time exposing (Posix)
 
 
+type alias Source =
+    { src : String
+    , label : Maybe String
+    }
+
+
+source : String -> Maybe String -> Source
+source =
+    Source
+
+
 type alias Model =
     { err : Maybe String
-    , sources : List ( String, Maybe String )
+    , sources : List Source
     , src : String
-    , editingSources : List ( String, Maybe String )
+    , editingSources : List Source
     , editingSrc : String
     , justAddedEditingRow : Bool
     , time : Int
@@ -55,9 +66,9 @@ type alias Model =
 
 
 type alias SavedModel =
-    { sources : List ( String, Maybe String )
+    { sources : List Source
     , src : String
-    , editingSources : List ( String, Maybe String )
+    , editingSources : List Source
     , editingSrc : String
     , switchPeriod : String
     , switchEnabled : Bool
@@ -805,7 +816,7 @@ digitKey digit modelIn =
             { modelIn | lastSwapTime = modelIn.time }
     in
     case LE.getAt index model.sources of
-        Just ( src, _ ) ->
+        Just { src } ->
             { model | src = src }
 
         Nothing ->
@@ -856,8 +867,8 @@ viewImage model index =
                 index
     in
     case LE.getAt idx sources of
-        Just ( s, _ ) ->
-            { model | src = s }
+        Just { src } ->
+            { model | src = src }
 
         _ ->
             model
