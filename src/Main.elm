@@ -156,12 +156,12 @@ savedModelDecoder =
         |> optional "mergeEditingSources" JD.bool True
 
 
-sourcesDecoder : Decoder (List ( String, Maybe String ))
+sourcesDecoder : Decoder (List Source)
 sourcesDecoder =
     JD.list <|
         JD.oneOf
             [ JD.string
-                |> JD.andThen (\s -> JD.succeed ( s, Nothing ))
+                |> JD.andThen (\s -> JD.succeed { src = s, label = Nothing })
             , JD.value
                 |> JD.andThen
                     (\v ->
@@ -175,19 +175,19 @@ sourcesDecoder =
                                         JD.fail "No mn field"
 
                                     Ok mn ->
-                                        JD.succeed ( s, mn )
+                                        JD.succeed { src = s, label = mn }
                     )
             ]
 
 
-encodeSource : ( String, Maybe String ) -> Value
-encodeSource ( s, mn ) =
+encodeSource : Source -> Value
+encodeSource { src, label } =
     JE.object
-        [ ( "s", JE.string s )
-        , ( "mn"
-          , case mn of
-                Just n ->
-                    JE.string n
+        [ ( "src", JE.string src )
+        , ( "label"
+          , case label of
+                Just l ->
+                    JE.string l
 
                 Nothing ->
                     JE.null
@@ -214,10 +214,15 @@ stonedEyeballsUrl =
     "stoned-eyeballs.jpg"
 
 
+sourceWithDefaultLabel : String -> Source
+sourceWithDefaultLabel src =
+    { src = src, label = Nothing }
+
+
 init : ( Model, Cmd Msg )
 init =
     ( { err = Nothing
-      , sources = [ ( stonedEyeballsUrl, Nothing ) ]
+      , sources = [ sourceWithDefaultLabel stonedEyeballsUrl ]
       , src = stonedEyeballsUrl
       , editingSources = []
       , editingSrc = ""
@@ -512,7 +517,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 _ =
                     Debug.log "InputEditingSrc" editingSrc
             in
-            case LE.findIndex (\( a, _ ) -> a == model.editingSrc) model.editingSources of
+            case LE.findIndex (\a -> a.editingSrc == model.editingSrc) model.editingSources of
                 Nothing ->
                     { model
                         | editingSrc = editingSrc
@@ -625,8 +630,9 @@ dropN n list =
         dropN (n - 1) <| cdr list
 
 
-headTail : String -> List ( String, Maybe String ) -> ( List ( String, Maybe String ), List ( String, Maybe String ) )
+headTail : String -> List Source -> ( List Source, List Source )
 headTail editingSrc editingSources =
+    -- TODO
     let
         head =
             LE.takeWhile (\( a, _ ) -> a /= editingSrc) editingSources
@@ -826,7 +832,7 @@ digitKey digit modelIn =
 nextImage : Model -> Model
 nextImage model =
     viewImage model
-        (case LE.findIndex (\( idx, _ ) -> idx == model.src) model.sources of
+        (case LE.findIndex (\idx -> idx.src == model.src) model.sources of
             Just idx ->
                 idx + 1
 
@@ -838,7 +844,7 @@ nextImage model =
 prevImage : Model -> Model
 prevImage model =
     viewImage model
-        (case LE.findIndex (\( src, _ ) -> src == model.src) model.sources of
+        (case LE.findIndex (\src -> src.src == model.src) model.sources of
             Just idx ->
                 idx - 1
 
@@ -943,8 +949,8 @@ viewInternal model =
             getNameFromFileName model.src
 
         index =
-            case LE.find (\src -> src == model.src) model.sources of
-                Just ( i, _ ) ->
+            case LE.findIndex (\src -> src.src == model.src) model.sources of
+                Just i ->
                     i
 
                 Nothing ->
