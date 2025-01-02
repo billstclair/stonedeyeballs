@@ -493,7 +493,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     headTail model.editingSrc model.editingSources
             in
             { model
-                | editingSources = head ++ [ ( "", Nothing ) ] ++ tail
+                | editingSources = head ++ [ sourceWithDefaultLabel "" ] ++ tail
                 , editingSrc = ""
                 , justAddedEditingRow = True
             }
@@ -504,7 +504,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model
                 | editingSources =
                     Debug.log "DeleteEditingSrc, sources:" <|
-                        List.filter (\( s, _ ) -> s /= model.editingSrc) model.editingSources
+                        List.filter (\s -> s.src /= model.editingSrc) model.editingSources
             }
                 |> withNoCmd
 
@@ -517,7 +517,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 _ =
                     Debug.log "InputEditingSrc" editingSrc
             in
-            case LE.findIndex (\a -> a.editingSrc == model.editingSrc) model.editingSources of
+            case LE.findIndex (\a -> a.src == model.editingSrc) model.editingSources of
                 Nothing ->
                     { model
                         | editingSrc = editingSrc
@@ -528,7 +528,9 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 Just editingSrcIdx ->
                     let
                         editingSources =
-                            LE.setAt editingSrcIdx editingSrc model.editingSources
+                            LE.setAt editingSrcIdx
+                                (sourceWithDefaultLabel editingSrc)
+                                model.editingSources
                     in
                     { model
                         | editingSrc = editingSrc
@@ -551,7 +553,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     |> withNoCmd
 
         DeleteAllEditingSources ->
-            { model | editingSources = [ "" ] }
+            { model | editingSources = [ sourceWithDefaultLabel "" ] }
                 |> withNoCmd
 
         DeleteState ->
@@ -585,7 +587,8 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 Ok list ->
                     { model
                         | sources =
-                            Debug.log "GotIndex, sources" list
+                            Debug.log "GotIndex, sources" <|
+                                List.map sourceWithDefaultLabel list
                         , editingSources = []
                     }
                         |> withNoCmd
@@ -635,9 +638,12 @@ headTail editingSrc editingSources =
     -- TODO
     let
         head =
-            LE.takeWhile (\( a, _ ) -> a /= editingSrc) editingSources
+            LE.takeWhile (\a -> a.src /= editingSrc) editingSources
     in
     case dropN (List.length head) editingSources of
+        [] ->
+            ( head, [] )
+
         [ es ] ->
             ( head ++ [ es ], [] )
 
@@ -981,7 +987,7 @@ viewInternal model =
         , text name
         , p []
             (List.indexedMap
-                (\idx ( url, maybeName ) ->
+                (\idx s ->
                     let
                         idxstr =
                             String.fromInt idx
@@ -993,12 +999,12 @@ viewInternal model =
                             ]
 
                         idxName =
-                            case maybeName of
+                            case s.label of
                                 Just n ->
                                     n
 
                                 Nothing ->
-                                    getNameFromFileName url
+                                    getNameFromFileName s.src
                     in
                     if idx == index then
                         span [ title idxName ] <|
@@ -1139,10 +1145,10 @@ viewEditingSources model =
     span []
         [ table [ class "prettytable" ] <|
             List.map
-                (\( s, maybeName ) ->
+                (\s ->
                     let
                         name =
-                            case maybeName of
+                            case s.label of
                                 Just n ->
                                     n
 
@@ -1152,14 +1158,14 @@ viewEditingSources model =
                     tr
                         [ onClick <|
                             if not model.justAddedEditingRow then
-                                SelectEditingSrc s
+                                SelectEditingSrc s.src
 
                             else
                                 Noop
                         ]
                         [ td []
                             [ span []
-                                [ if s == model.editingSrc then
+                                [ if s.src == model.editingSrc then
                                     span []
                                         [ button AddEditingSrc "Add"
                                         , text " "
@@ -1176,19 +1182,18 @@ viewEditingSources model =
                                         , input
                                             [ onInput InputEditingSrc
                                             , width 50
-                                            , value s
+                                            , value s.src
                                             , style "min-height" "1em"
                                             , style "min-width" "30em"
                                             ]
-                                            [ text s ]
+                                            [ text s.src ]
                                         , text " "
                                         , input
                                             [ onInput InputEditingName
                                             , width 20
                                             , value name
                                             , style "min-height" "1em"
-                                            , style "min-width"
-                                            , "20em"
+                                            , style "min-width" "1em"
                                             ]
                                             [ text name ]
                                         ]
@@ -1199,11 +1204,11 @@ viewEditingSources model =
                                         , style "min-width" "30em"
                                         ]
                                         [ text <|
-                                            if s == "" then
+                                            if s.src == "" then
                                                 special.nbsp
 
                                             else
-                                                s
+                                                s.src
                                         ]
                                 ]
                             ]
