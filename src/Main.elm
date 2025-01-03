@@ -160,7 +160,19 @@ encodeSource { src, label } =
         , ( "label"
           , case label of
                 Just l ->
-                    JE.string l
+                    if
+                        (l == "")
+                            || (l
+                                    == sourceLabel
+                                        { src = src
+                                        , label = label
+                                        }
+                               )
+                    then
+                        JE.null
+
+                    else
+                        JE.string l
 
                 Nothing ->
                     JE.null
@@ -1032,7 +1044,7 @@ viewInternal model =
                 model.sources
             )
         , p []
-            [ text "Click on the image to change. Or press s/f, j/l, digit, arrows, or digit links above."
+            [ text "Click on the image to change. Or press s/f, j/l, arrows, or digit links above."
             , br
             , checkBox ToggleSwitchEnabled
                 model.switchEnabled
