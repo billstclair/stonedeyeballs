@@ -40,6 +40,16 @@ type alias Source =
     }
 
 
+sourceLabel : Source -> String
+sourceLabel s =
+    case s.label of
+        Just label ->
+            label
+
+        Nothing ->
+            getNameFromFileName s.src
+
+
 source : String -> Maybe String -> Source
 source =
     Source
@@ -540,8 +550,24 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                         |> withNoCmd
 
         InputEditingName name ->
-            -- TODO
-            model |> withNoCmd
+            (case LE.findIndex (\s -> s.src == model.editingSrc) model.editingSources of
+                Just i ->
+                    case LE.getAt i model.editingSources of
+                        Just s ->
+                            { model
+                                | editingSources =
+                                    LE.setAt i
+                                        { s | label = Just name }
+                                        model.editingSources
+                            }
+
+                        Nothing ->
+                            model
+
+                Nothing ->
+                    model
+            )
+                |> withNoCmd
 
         SaveRestoreEditingSources savep ->
             if savep then
@@ -948,11 +974,26 @@ view model =
         viewInternal model
 
 
+modelLabel : Model -> String
+modelLabel model =
+    case LE.find (\s -> s.src == model.src) model.sources of
+        Just s ->
+            case s.label of
+                Just l ->
+                    l
+
+                _ ->
+                    getNameFromFileName s.src
+
+        Nothing ->
+            ""
+
+
 viewInternal : Model -> Html Msg
 viewInternal model =
     let
         name =
-            getNameFromFileName model.src
+            modelLabel model
 
         index =
             case LE.findIndex (\src -> src.src == model.src) model.sources of
@@ -1146,15 +1187,6 @@ viewEditingSources model =
         [ table [ class "prettytable" ] <|
             List.map
                 (\s ->
-                    let
-                        name =
-                            case s.label of
-                                Just n ->
-                                    n
-
-                                Nothing ->
-                                    ""
-                    in
                     tr
                         [ onClick <|
                             if not model.justAddedEditingRow then
@@ -1191,11 +1223,9 @@ viewEditingSources model =
                                         , input
                                             [ onInput InputEditingName
                                             , width 20
-                                            , value name
-                                            , style "min-height" "1em"
-                                            , style "min-width" "1em"
+                                            , value <| sourceLabel s
                                             ]
-                                            [ text name ]
+                                            [ text s.src ]
                                         ]
 
                                   else
