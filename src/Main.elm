@@ -125,36 +125,6 @@ savedModelToModel savedModel model =
 
 savedModelDecoder : Decoder SavedModel
 savedModelDecoder =
-    let
-        parseValueList : List Value -> Decoder (List ( String, Maybe String ))
-        parseValueList values =
-            let
-                loop : List Value -> List ( String, Maybe String ) -> Decoder (List ( String, Maybe String ))
-                loop valueTail res =
-                    case valueTail of
-                        [] ->
-                            JD.succeed (List.reverse res)
-
-                        v :: rest ->
-                            case JD.decodeValue pairDecoder v of
-                                Ok e ->
-                                    loop rest (e :: res)
-
-                                Err _ ->
-                                    JD.fail "foo"
-
-                pairDecoder : Decoder ( String, Maybe String )
-                pairDecoder =
-                    JD.field "s" JD.string
-                        |> JD.andThen
-                            (\s ->
-                                JD.field "mn" (JD.nullable JD.string)
-                                    |> JD.andThen
-                                        (\e -> JD.succeed ( s, e ))
-                            )
-            in
-            loop values []
-    in
     JD.succeed SavedModel
         |> required "sources" sourcesDecoder
         |> required "src" JD.string
@@ -168,26 +138,19 @@ savedModelDecoder =
 
 sourcesDecoder : Decoder (List Source)
 sourcesDecoder =
-    JD.list <|
-        JD.oneOf
-            [ JD.string
-                |> JD.andThen (\s -> JD.succeed { src = s, label = Nothing })
-            , JD.value
-                |> JD.andThen
-                    (\v ->
-                        case JD.decodeValue (JD.field "s" JD.string) v of
-                            Err _ ->
-                                JD.fail "No s field"
+    JD.list sourceDecoder
 
-                            Ok s ->
-                                case JD.decodeValue (JD.field "mn" (JD.nullable JD.string)) v of
-                                    Err _ ->
-                                        JD.fail "No mn field"
 
-                                    Ok mn ->
-                                        JD.succeed { src = s, label = mn }
-                    )
-            ]
+sourceDecoder : Decoder Source
+sourceDecoder =
+    JD.oneOf
+        [ JD.string
+            |> JD.andThen
+                (\s -> sourceWithDefaultLabel s |> JD.succeed)
+        , JD.succeed Source
+            |> required "src" JD.string
+            |> optional "label" (JD.nullable JD.string) Nothing
+        ]
 
 
 encodeSource : Source -> Value
@@ -1213,10 +1176,10 @@ viewEditingSources model =
                                             text ""
                                         , input
                                             [ onInput InputEditingSrc
-                                            , width 50
+                                            , width 30
                                             , value s.src
                                             , style "min-height" "1em"
-                                            , style "min-width" "30em"
+                                            , style "min-width" "20em"
                                             ]
                                             [ text s.src ]
                                         , text " "
