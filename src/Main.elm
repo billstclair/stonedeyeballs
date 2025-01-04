@@ -6,8 +6,6 @@ Add save/restore area for lists of urls.
 
 -}
 
--- import Browser.Events as Events exposing (Visibility(..))
-
 import AssocSet as AS exposing (Set)
 import Browser
 import Browser.Events as Events exposing (Visibility(..))
@@ -66,6 +64,7 @@ type alias Model =
     , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
+    , showEditingSources : Bool
     , mergeEditingSources : Bool
     , started : Started
     , funnelState : State
@@ -82,6 +81,7 @@ type alias SavedModel =
     , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
+    , showEditingSources : Bool
     , mergeEditingSources : Bool
     }
 
@@ -114,6 +114,7 @@ modelToSavedModel model =
     , switchPeriod = model.switchPeriod
     , switchEnabled = model.switchEnabled
     , showControls = model.showControls
+    , showEditingSources = model.showEditingSources
     , mergeEditingSources = model.mergeEditingSources
     }
 
@@ -130,6 +131,7 @@ savedModelToModel savedModel model =
         , switchPeriod = savedModel.switchPeriod
         , switchEnabled = savedModel.switchEnabled
         , showControls = savedModel.showControls
+        , showEditingSources = savedModel.showEditingSources
         , mergeEditingSources = savedModel.mergeEditingSources
     }
 
@@ -146,6 +148,7 @@ savedModelDecoder =
         |> optional "switchPeriod" JD.string "5"
         |> required "switchEnabled" JD.bool
         |> optional "showControls" JD.bool False
+        |> optional "showEditingSources" JD.bool True
         |> optional "mergeEditingSources" JD.bool True
 
 
@@ -203,6 +206,7 @@ encodeSavedModel savedModel =
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
+        , ( "showEditingSources", JE.bool savedModel.showEditingSources )
         , ( "mergeEditingSources", JE.bool savedModel.mergeEditingSources )
         ]
 
@@ -239,6 +243,7 @@ init =
       , switchPeriod = "5"
       , switchEnabled = True
       , showControls = False
+      , showEditingSources = True
       , mergeEditingSources = True
       , started = NotStarted
       , funnelState = initialFunnelState
