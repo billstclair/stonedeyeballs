@@ -640,31 +640,35 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
 maybeAddNewSources : List Source -> Model -> Model
 maybeAddNewSources sources model =
-    let
-        sourcesSet =
-            AS.fromList sources
+    if not model.mergeEditingSources then
+        model
 
-        lastSourcesSet =
-            AS.fromList model.lastSources
+    else
+        let
+            sourcesSet =
+                AS.fromList sources
 
-        newSourcesSet =
-            AS.diff sourcesSet lastSourcesSet
+            lastSourcesSet =
+                AS.fromList model.lastSources
 
-        newSources =
-            AS.toList newSourcesSet
+            newSourcesSet =
+                AS.diff sourcesSet lastSourcesSet
 
-        editingSources =
-            case model.editingSources of
-                [] ->
-                    model.sources
+            newSources =
+                AS.toList newSourcesSet
 
-                s ->
-                    s
-    in
-    { model
-        | editingSources = editingSources ++ newSources
-        , lastSources = model.lastSources ++ newSources
-    }
+            editingSources =
+                case model.editingSources of
+                    [] ->
+                        model.sources
+
+                    s ->
+                        s
+        in
+        { model
+            | editingSources = editingSources ++ newSources
+            , lastSources = model.lastSources ++ newSources
+        }
 
 
 delay : Int -> msg -> Cmd msg
