@@ -57,6 +57,7 @@ type alias Model =
     , src : String
     , editingSources : List Source
     , editingSrc : String
+    , sourcePanels : Dict String (List Source)
     , justAddedEditingRow : Bool
     , time : Int
     , lastSwapTime : Int
@@ -76,6 +77,7 @@ type alias SavedModel =
     , src : String
     , editingSources : List Source
     , editingSrc : String
+    , sourcePanels : Dict String (List Source)
     , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
@@ -87,7 +89,15 @@ saveModel : Model -> Cmd Msg
 saveModel model =
     put "model"
         (modelToSavedModel model
+            |> Debug.log "  SavedModel"
             |> encodeSavedModel
+            |> (\sm ->
+                    let
+                        e =
+                            Debug.log "sm" <| JE.encode 2 sm
+                    in
+                    sm
+               )
             |> Just
         )
 
@@ -98,6 +108,7 @@ modelToSavedModel model =
     , src = model.src
     , editingSources = model.editingSources
     , editingSrc = model.editingSrc
+    , sourcePanels = model.sourcePanels
     , switchPeriod = model.switchPeriod
     , switchEnabled = model.switchEnabled
     , showControls = model.showControls
@@ -112,6 +123,7 @@ savedModelToModel savedModel model =
         , src = savedModel.src
         , editingSources = savedModel.editingSources
         , editingSrc = savedModel.editingSrc
+        , sourcePanels = savedModel.sourcePanels
         , switchPeriod = savedModel.switchPeriod
         , switchEnabled = savedModel.switchEnabled
         , showControls = savedModel.showControls
@@ -126,6 +138,7 @@ savedModelDecoder =
         |> required "src" JD.string
         |> optional "editingSources" sourcesDecoder []
         |> optional "editingSrc" JD.string ""
+        |> optional "sourcePanels" (JD.dict (JD.list sourceDecoder)) Dict.empty
         |> optional "switchPeriod" JD.string "5"
         |> required "switchEnabled" JD.bool
         |> optional "showControls" JD.bool False
@@ -202,6 +215,7 @@ init =
       , src = stonedEyeballsUrl
       , editingSources = []
       , editingSrc = ""
+      , sourcePanels = Dict.fromList []
       , justAddedEditingRow = False
       , time = 0
       , lastSwapTime = 0
@@ -423,7 +437,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             --    Debug.log "KeyDown" key
             --in
             if
-                List.member key [ "ArrowLeft", "j", "J", "s", "S" ]
+                List.member key [ "ArrowLeft", "j", "J", "d", "s", "S" ]
             then
                 prevImage model |> withNoCmd
 
