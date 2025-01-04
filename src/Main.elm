@@ -164,24 +164,28 @@ sourceDecoder =
 
 encodeSource : Source -> Value
 encodeSource { src, label } =
-    JE.object
-        [ ( "src", JE.string src )
-        , ( "label"
-          , case label of
-                Just l ->
-                    if
-                        (l == "")
-                            || (l == (srcSource src |> sourceLabel))
-                    then
+    if label == Nothing then
+        JE.string src
+
+    else
+        JE.object
+            [ ( "src", JE.string src )
+            , ( "label"
+              , case label of
+                    Just l ->
+                        if
+                            (l == "")
+                                || (l == (srcSource src |> sourceLabel))
+                        then
+                            JE.null
+
+                        else
+                            JE.string l
+
+                    Nothing ->
                         JE.null
-
-                    else
-                        JE.string l
-
-                Nothing ->
-                    JE.null
-          )
-        ]
+              )
+            ]
 
 
 encodeSavedModel : SavedModel -> Value
