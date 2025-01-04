@@ -203,6 +203,7 @@ encodeSavedModel savedModel =
         , ( "src", JE.string savedModel.src )
         , ( "editingSources", JE.list encodeSource savedModel.editingSources )
         , ( "editingSrc", JE.string savedModel.editingSrc )
+        , ( "sourcePanels", JE.dict identity (JE.list encodeSource) savedModel.sourcePanels )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
@@ -1195,23 +1196,9 @@ viewControls model =
                     model.mergeEditingSources
                     "Merge new app images with your list."
                 ]
-            , let
-                different =
-                    model.sources /= model.editingSources
-              in
-              p []
-                [ enabledButton different
-                    (SaveRestoreEditingSources True)
-                    "Save"
-                , text " "
-                , button DeleteAllEditingSources
-                    "Delete all"
-                , text " "
-                , enabledButton different
-                    (SaveRestoreEditingSources False)
-                    "Restore"
-                ]
+            , viewSaveDeleteButtons model
             , viewEditingSources model
+            , viewSaveDeleteButtons model
             , p []
                 [ if model.reallyDeleteState then
                     button DeleteState "Really Delete State"
@@ -1220,6 +1207,26 @@ viewControls model =
                     button DeleteState "Delete State (after confirmation)"
                 ]
             ]
+        ]
+
+
+viewSaveDeleteButtons : Model -> Html Msg
+viewSaveDeleteButtons model =
+    let
+        different =
+            model.sources /= model.editingSources
+    in
+    p []
+        [ enabledButton different
+            (SaveRestoreEditingSources True)
+            "Save"
+        , text " "
+        , button DeleteAllEditingSources
+            "Delete all"
+        , text " "
+        , enabledButton different
+            (SaveRestoreEditingSources False)
+            "Restore"
         ]
 
 
