@@ -10,6 +10,7 @@ Merge with `site/index.json` if `mergeWithImageIndex` is true.
 
 -- import Browser.Events as Events exposing (Visibility(..))
 
+import AssocSet as AS exposing (Set)
 import Browser
 import Browser.Events as Events exposing (Visibility(..))
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
@@ -54,6 +55,7 @@ source =
 type alias Model =
     { err : Maybe String
     , sources : List Source
+    , lastSources : List Source
     , src : String
     , editingSources : List Source
     , editingSrc : String
@@ -74,6 +76,7 @@ type alias Model =
 
 type alias SavedModel =
     { sources : List Source
+    , lastSources : List Source
     , src : String
     , editingSources : List Source
     , editingSrc : String
@@ -105,6 +108,7 @@ saveModel model =
 modelToSavedModel : Model -> SavedModel
 modelToSavedModel model =
     { sources = model.sources
+    , lastSources = model.lastSources
     , src = model.src
     , editingSources = model.editingSources
     , editingSrc = model.editingSrc
@@ -120,6 +124,7 @@ savedModelToModel : SavedModel -> Model -> Model
 savedModelToModel savedModel model =
     { model
         | sources = savedModel.sources
+        , lastSources = savedModel.lastSources
         , src = savedModel.src
         , editingSources = savedModel.editingSources
         , editingSrc = savedModel.editingSrc
@@ -135,6 +140,7 @@ savedModelDecoder : Decoder SavedModel
 savedModelDecoder =
     JD.succeed SavedModel
         |> required "sources" sourcesDecoder
+        |> optional "lastSources" sourcesDecoder []
         |> required "src" JD.string
         |> optional "editingSources" sourcesDecoder []
         |> optional "editingSrc" JD.string ""
@@ -192,6 +198,7 @@ encodeSavedModel : SavedModel -> Value
 encodeSavedModel savedModel =
     JE.object
         [ ( "sources", JE.list encodeSource savedModel.sources )
+        , ( "lastSources", JE.list encodeSource savedModel.lastSources )
         , ( "src", JE.string savedModel.src )
         , ( "editingSources", JE.list encodeSource savedModel.editingSources )
         , ( "editingSrc", JE.string savedModel.editingSrc )
@@ -207,6 +214,11 @@ stonedEyeballsUrl =
     "stoned-eyeballs.jpg"
 
 
+stonedEyeballsSource : Source
+stonedEyeballsSource =
+    srcSource stonedEyeballsUrl
+
+
 srcSource : String -> Source
 srcSource src =
     { src = src, label = Nothing }
@@ -215,7 +227,8 @@ srcSource src =
 init : ( Model, Cmd Msg )
 init =
     ( { err = Nothing
-      , sources = [ srcSource stonedEyeballsUrl ]
+      , sources = [ stonedEyeballsSource ]
+      , lastSources = [ stonedEyeballsSource ]
       , src = stonedEyeballsUrl
       , editingSources = []
       , editingSrc = ""
@@ -289,7 +302,7 @@ localStorageSend message =
 
 type Msg
     = Noop
-    | GotIndex (Result Http.Error (List String))
+    | GotIndex Bool (Result Http.Error (List String))
     | MouseDown
     | ReceiveTime Posix
     | SetVisible Visibility
@@ -337,7 +350,7 @@ update msg model =
                 Process _ ->
                     False
 
-                GotIndex _ ->
+                GotIndex _ _ ->
                     False
 
                 SetVisible _ ->
@@ -578,7 +591,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     , editingSources = []
                     , editingSrc = ""
                 }
-                    |> withCmds [ cmd, clearKeys "", getIndexJson 0 ]
+                    |> withCmds [ cmd, clearKeys "", getIndexJson True ]
 
             else
                 { model | reallyDeleteState = True }
@@ -587,7 +600,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
         Noop ->
             model |> withNoCmd
 
-        GotIndex result ->
+        GotIndex setSourcesList result ->
             case result of
                 Err e ->
                     ( { model | err = Just <| Debug.toString e }
@@ -595,13 +608,20 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     )
 
                 Ok list ->
-                    { model
-                        | sources =
+                    let
+                        sources =
                             Debug.log "GotIndex, sources" <|
                                 List.map srcSource list
-                        , editingSources = []
-                    }
-                        |> withNoCmd
+
+                        mdl =
+                            if setSourcesList then
+                                { model | sources = sources }
+
+                            else
+                                model
+                                    |> maybeAddNewSources sources
+                    in
+                    mdl |> withNoCmd
 
         Process value ->
             case
@@ -616,6 +636,35 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
                 Ok res ->
                     res
+
+
+maybeAddNewSources : List Source -> Model -> Model
+maybeAddNewSources sources model =
+    let
+        sourcesSet =
+            AS.fromList sources
+
+        lastSourcesSet =
+            AS.fromList model.lastSources
+
+        newSourcesSet =
+            AS.diff sourcesSet lastSourcesSet
+
+        newSources =
+            AS.toList newSourcesSet
+
+        editingSources =
+            case model.editingSources of
+                [] ->
+                    model.sources
+
+                s ->
+                    s
+    in
+    { model
+        | editingSources = editingSources ++ newSources
+        , lastSources = model.lastSources ++ newSources
+    }
 
 
 delay : Int -> msg -> Cmd msg
@@ -716,14 +765,6 @@ storageHandler response state model =
 
             else
                 Cmd.none
-
-        lbl label =
-            case label of
-                Nothing ->
-                    ""
-
-                Just l ->
-                    "[" ++ l ++ "] "
     in
     case response of
         LocalStorage.GetResponse { label, key, value } ->
@@ -766,17 +807,17 @@ handleGetResponse maybeLabel key maybeValue model =
                     model |> withNoCmd
 
 
-getIndexJson : a -> Cmd Msg
-getIndexJson _ =
+getIndexJson : Bool -> Cmd Msg
+getIndexJson setSourceList =
     let
         s =
-            Debug.log "getIndexJson" 0
+            Debug.log "getIndexJson" setSourceList
     in
     Http.get
         { url = "images/index.json"
         , expect =
             Http.expectJson
-                GotIndex
+                (GotIndex setSourceList)
                 (JD.list JD.string)
         }
 
@@ -794,9 +835,9 @@ handleGetModel maybeValue model =
         Nothing ->
             let
                 s =
-                    Debug.log "null model value, getIndexJson" 0
+                    Debug.log "null model value, getIndexJson" True
             in
-            model2 |> withCmd (getIndexJson 0)
+            model2 |> withCmd (getIndexJson True)
 
         Just value ->
             case JD.decodeValue savedModelDecoder value of
@@ -807,11 +848,11 @@ handleGetModel maybeValue model =
                                 Debug.log "Error decoding SavedModel"
                                     (JD.errorToString err)
                     }
-                        |> withCmd (getIndexJson 0)
+                        |> withCmd (getIndexJson True)
 
                 Ok savedModel ->
                     savedModelToModel savedModel model2
-                        |> withNoCmd
+                        |> withCmd (getIndexJson False)
 
 
 centerFit : List (Attribute msg)
