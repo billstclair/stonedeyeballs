@@ -2,13 +2,9 @@ module Main exposing (main)
 
 {-| TODO:
 
-Editing of url strings in controls.
-
 Add save/restore area for lists of urls.
 
 Merge with `site/index.json` if `mergeWithImageIndex` is true.
-
-Switch delay, in seconds, floating.
 
 -}
 
@@ -146,7 +142,7 @@ sourceDecoder =
     JD.oneOf
         [ JD.string
             |> JD.andThen
-                (\s -> sourceWithDefaultLabel s |> JD.succeed)
+                (\s -> srcSource s |> JD.succeed)
         , JD.succeed Source
             |> required "src" JD.string
             |> optional "label" (JD.nullable JD.string) Nothing
@@ -162,12 +158,7 @@ encodeSource { src, label } =
                 Just l ->
                     if
                         (l == "")
-                            || (l
-                                    == sourceLabel
-                                        { src = src
-                                        , label = label
-                                        }
-                               )
+                            || (l == (srcSource src |> sourceLabel))
                     then
                         JE.null
 
@@ -199,15 +190,15 @@ stonedEyeballsUrl =
     "stoned-eyeballs.jpg"
 
 
-sourceWithDefaultLabel : String -> Source
-sourceWithDefaultLabel src =
+srcSource : String -> Source
+srcSource src =
     { src = src, label = Nothing }
 
 
 init : ( Model, Cmd Msg )
 init =
     ( { err = Nothing
-      , sources = [ sourceWithDefaultLabel stonedEyeballsUrl ]
+      , sources = [ srcSource stonedEyeballsUrl ]
       , src = stonedEyeballsUrl
       , editingSources = []
       , editingSrc = ""
@@ -478,7 +469,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     headTail model.editingSrc model.editingSources
             in
             { model
-                | editingSources = head ++ [ sourceWithDefaultLabel "" ] ++ tail
+                | editingSources = head ++ [ srcSource "" ] ++ tail
                 , editingSrc = ""
                 , justAddedEditingRow = True
             }
@@ -514,7 +505,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     let
                         editingSources =
                             LE.setAt editingSrcIdx
-                                (sourceWithDefaultLabel editingSrc)
+                                (srcSource editingSrc)
                                 model.editingSources
                     in
                     { model
@@ -554,7 +545,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     |> withNoCmd
 
         DeleteAllEditingSources ->
-            { model | editingSources = [ sourceWithDefaultLabel "" ] }
+            { model | editingSources = [ srcSource "" ] }
                 |> withNoCmd
 
         DeleteState ->
@@ -589,7 +580,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     { model
                         | sources =
                             Debug.log "GotIndex, sources" <|
-                                List.map sourceWithDefaultLabel list
+                                List.map srcSource list
                         , editingSources = []
                     }
                         |> withNoCmd
