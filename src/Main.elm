@@ -4,8 +4,6 @@ module Main exposing (main)
 
 Add save/restore area for lists of urls.
 
-Merge with `site/index.json` if `mergeWithImageIndex` is true.
-
 -}
 
 -- import Browser.Events as Events exposing (Visibility(..))
@@ -811,18 +809,37 @@ handleGetResponse maybeLabel key maybeValue model =
                     model |> withNoCmd
 
 
+type alias GetArgsJson msg =
+    { url : String, expect : Http.Expect msg, headers : List Http.Header }
+
+
+httpGet : GetArgsJson msg -> Cmd msg
+httpGet args =
+    Http.request
+        { method = "GET"
+        , headers = args.headers
+        , url = args.url
+        , body = Http.emptyBody
+        , expect = args.expect
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
 getIndexJson : Bool -> Cmd Msg
 getIndexJson setSourceList =
     let
         s =
             Debug.log "getIndexJson" setSourceList
     in
-    Http.get
+    httpGet
         { url = "images/index.json"
         , expect =
             Http.expectJson
                 (GotIndex setSourceList)
                 (JD.list JD.string)
+        , headers =
+            [ Http.header "Cache-control" "no-cache, no-store" ]
         }
 
 
