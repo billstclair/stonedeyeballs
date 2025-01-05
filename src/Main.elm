@@ -1102,17 +1102,22 @@ viewInternal model =
            else
             embed
           )
-            (List.concat
-                [ centerFit
-                , [ src modelSrc
-                  , style "text-align" "center"
-                  , if isImage then
-                        onClick MouseDown
+            ([ [ src modelSrc
+               , style "text-align" "center"
+               , if isImage then
+                    onClick MouseDown
 
-                    else
-                        style "height" "max"
-                  ]
-                ]
+                 else
+                    style "height" "max-content"
+               , style "max-height" "500px"
+               ]
+             , if isImage then
+                centerFit
+
+               else
+                []
+             ]
+                |> List.concat
             )
             []
         , br
