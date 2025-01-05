@@ -11,7 +11,7 @@ import Browser
 import Browser.Events as Events exposing (Visibility(..))
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
-import Html exposing (Attribute, Html, a, div, hr, img, input, p, span, table, td, text, tr)
+import Html exposing (Attribute, Html, a, div, embed, hr, img, input, p, span, table, td, text, tr)
 import Html.Attributes exposing (checked, class, disabled, height, href, property, src, style, target, title, type_, value, width)
 import Html.Events exposing (onClick, onInput)
 import Http
@@ -25,6 +25,7 @@ import Process
 import String.Extra as SE
 import Task exposing (Task, succeed)
 import Time exposing (Posix)
+import Url
 
 
 type alias Source =
@@ -514,7 +515,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 , justAddedEditingRow = True
             }
                 |> withCmd
-                    (delay 0 <| SelectEditingSrc "")
+                    (delay 1 <| SelectEditingSrc "")
 
         DeleteEditingSrc ->
             { model
@@ -1046,6 +1047,25 @@ modelLabel model =
             ""
 
 
+urlType : String -> String
+urlType url =
+    String.split "." url
+        |> List.reverse
+        |> (\l ->
+                case List.head l of
+                    Nothing ->
+                        ""
+
+                    Just res ->
+                        res
+           )
+
+
+imgTypes : List String
+imgTypes =
+    String.split "," "jpg,jpeg,gif,png"
+
+
 viewInternal : Model -> Html Msg
 viewInternal model =
     let
@@ -1066,23 +1086,43 @@ viewInternal model =
 
             else
                 "images/" ++ model.src
+
+        isImage =
+            List.member (urlType modelSrc) imgTypes
     in
     div
         [ style "text-align" "center"
         , style "margin" "auto"
         ]
-        [ img
+        [ (if isImage then
+            img
+
+           else
+            embed
+          )
             (List.concat
                 [ centerFit
                 , [ src modelSrc
                   , style "text-align" "center"
-                  , onClick MouseDown
+                  , if isImage then
+                        onClick MouseDown
+
+                    else
+                        style "height" "minmax(30em, 60em)"
                   ]
                 ]
             )
             []
         , br
-        , text name
+        , if isImage then
+            text name
+
+          else
+            a
+                [ href modelSrc
+                , target "_blank"
+                ]
+                [ text name ]
         , p []
             (List.indexedMap
                 (\idx s ->
