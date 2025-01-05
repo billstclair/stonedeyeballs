@@ -1093,6 +1093,8 @@ viewInternal model =
     div
         [ style "text-align" "center"
         , style "margin" "auto"
+        , style "max-height" "60em"
+        , style "overflow" "auto"
         ]
         [ (if isImage then
             img
@@ -1108,7 +1110,7 @@ viewInternal model =
                         onClick MouseDown
 
                     else
-                        style "height" "minmax(30em, 60em)"
+                        style "height" "minmax(40em, 60em)"
                   ]
                 ]
             )
