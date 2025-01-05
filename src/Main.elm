@@ -1063,7 +1063,7 @@ urlType url =
 
 imgTypes : List String
 imgTypes =
-    String.split "," "jpg,jpeg,gif,png"
+    String.split "," "jpg,jpeg,gif,png,svg,webp"
 
 
 viewInternal : Model -> Html Msg
