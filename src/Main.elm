@@ -1110,7 +1110,7 @@ viewInternal model =
                         onClick MouseDown
 
                     else
-                        style "height" "minmax(40em, 60em)"
+                        style "height" "max"
                   ]
                 ]
             )
