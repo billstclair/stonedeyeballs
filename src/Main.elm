@@ -486,7 +486,17 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             )
 
         ToggleControls ->
-            { model | showControls = not model.showControls }
+            { model
+                | showControls =
+                    not model.showControls
+                , editingSrc =
+                    Debug.log "ToggleControls, editingSrc" <|
+                        if model.showControls then
+                            model.editingSrc
+
+                        else
+                            model.src
+            }
                 |> withNoCmd
 
         ToggleShowEditingSources ->
@@ -522,6 +532,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 | editingSources =
                     Debug.log "DeleteEditingSrc, sources:" <|
                         List.filter (\s -> s.src /= model.editingSrc) model.editingSources
+                , editingSrc = ""
             }
                 |> withNoCmd
 
@@ -578,11 +589,17 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         SaveRestoreEditingSources savep ->
             if savep then
-                { model | sources = model.editingSources }
+                { model
+                    | sources = model.editingSources
+                    , src = model.editingSrc
+                }
                     |> withNoCmd
 
             else
-                { model | editingSources = model.sources }
+                { model
+                    | editingSources = model.sources
+                    , editingSrc = model.src
+                }
                     |> withNoCmd
 
         DeleteAllEditingSources ->
