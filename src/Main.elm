@@ -314,6 +314,7 @@ type Msg
     | InputSwitchPeriod String
     | ToggleSwitchEnabled
     | ToggleControls
+    | ToggleShowEditingSources
     | ToggleMergeEditingSources
     | SelectEditingSrc String
     | AddEditingSrc
@@ -485,6 +486,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         ToggleControls ->
             { model | showControls = not model.showControls }
+                |> withNoCmd
+
+        ToggleShowEditingSources ->
+            { model | showEditingSources = not model.showEditingSources }
                 |> withNoCmd
 
         ToggleMergeEditingSources ->
@@ -1196,9 +1201,7 @@ viewControls model =
                     model.mergeEditingSources
                     "Merge new app images with your list."
                 ]
-            , viewSaveDeleteButtons model
             , viewEditingSources model
-            , viewSaveDeleteButtons model
             , p []
                 [ if model.reallyDeleteState then
                     button DeleteState "Really Delete State"
@@ -1232,6 +1235,28 @@ viewSaveDeleteButtons model =
 
 viewEditingSources : Model -> Html Msg
 viewEditingSources model =
+    span []
+        [ button ToggleShowEditingSources <|
+            if model.showEditingSources then
+                "Hide sources"
+
+            else
+                "Show sources"
+        , br
+        , if not model.showEditingSources then
+            text ""
+
+          else
+            span []
+                [ viewSaveDeleteButtons model
+                , viewEditingSourcesInternal model
+                , viewSaveDeleteButtons model
+                ]
+        ]
+
+
+viewEditingSourcesInternal : Model -> Html Msg
+viewEditingSourcesInternal model =
     let
         sources =
             case model.editingSources of
