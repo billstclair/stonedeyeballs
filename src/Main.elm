@@ -1288,6 +1288,7 @@ viewControls model =
                     "Merge new app images with your list."
                 ]
             , viewEditingSources model
+            , viewSourcePanels model
             , p []
                 [ if model.reallyDeleteState then
                     button DeleteState "Really Delete State"
@@ -1337,7 +1338,6 @@ viewEditingSources model =
                 [ viewSaveDeleteButtons model
                 , viewEditingSourcesInternal model
                 , viewSaveDeleteButtons model
-                , viewSourcePanels model
                 ]
         ]
 
