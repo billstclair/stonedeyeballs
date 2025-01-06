@@ -9,6 +9,7 @@ Add save/restore area for lists of urls.
 import AssocSet as AS exposing (Set)
 import Browser
 import Browser.Events as Events exposing (Visibility(..))
+import Browser.Navigation as Navigation exposing (Key)
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
 import Html exposing (Attribute, Html, a, div, embed, hr, img, input, p, span, table, td, text, tr)
@@ -326,6 +327,7 @@ type Msg
     | SaveRestoreEditingSources Bool
     | DeleteAllEditingSources
     | AddSourcePanel
+    | ReloadFromServer
     | DeleteState
     | Process Value
 
@@ -617,6 +619,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     Dict.insert name [] model.sourcePanels
             }
                 |> withNoCmd
+
+        ReloadFromServer ->
+            model
+                |> withCmd Navigation.reloadAndSkipCache
 
         DeleteState ->
             if model.reallyDeleteState then
@@ -1289,6 +1295,8 @@ viewControls model =
                 ]
             , viewEditingSources model
             , viewSourcePanels model
+            , p []
+                [ button ReloadFromServer "Reload code from server" ]
             , p []
                 [ if model.reallyDeleteState then
                     button DeleteState "Really Delete State"
