@@ -1375,7 +1375,7 @@ viewEditingSources model =
                 , viewSaveDeleteButtons model
                 , textarea
                     [ style "min-height" "20em"
-                    , style "min-width" "40em"
+                    , style "width" "95%"
                     , onInput InputControlsJson
                     , value model.controlsJson
                     ]
