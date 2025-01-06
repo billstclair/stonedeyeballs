@@ -12,7 +12,7 @@ import Browser.Events as Events exposing (Visibility(..))
 import Browser.Navigation as Navigation exposing (Key)
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
-import Html exposing (Attribute, Html, a, div, embed, hr, img, input, p, span, table, td, text, tr)
+import Html exposing (Attribute, Html, a, div, embed, hr, img, input, p, span, table, td, text, textarea, tr)
 import Html.Attributes exposing (checked, class, disabled, height, href, property, src, style, target, title, type_, value, width)
 import Html.Events exposing (onClick, onInput)
 import Http
@@ -68,6 +68,7 @@ type alias Model =
     , showControls : Bool
     , showEditingSources : Bool
     , mergeEditingSources : Bool
+    , controlsJson : String
     , started : Started
     , funnelState : State
     }
@@ -136,6 +137,7 @@ savedModelToModel savedModel model =
         , showEditingSources = savedModel.showEditingSources
         , mergeEditingSources = savedModel.mergeEditingSources
     }
+        |> updateControlsJson
 
 
 savedModelDecoder : Decoder SavedModel
@@ -248,11 +250,22 @@ init =
       , showControls = False
       , showEditingSources = True
       , mergeEditingSources = True
+      , controlsJson = "[]"
       , started = NotStarted
       , funnelState = initialFunnelState
       }
     , Cmd.none
     )
+
+
+computeControlsJson : List Source -> String
+computeControlsJson sources =
+    JE.encode 2 <| JE.list encodeSource sources
+
+
+updateControlsJson : Model -> Model
+updateControlsJson model =
+    { model | controlsJson = computeControlsJson model.editingSources }
 
 
 
@@ -326,6 +339,7 @@ type Msg
     | InputEditingName String
     | SaveRestoreEditingSources Bool
     | DeleteAllEditingSources
+    | InputControlsJson String
     | AddSourcePanel
     | ReloadFromServer
     | DeleteState
@@ -412,6 +426,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
         model =
             if modelIn2.editingSources == [] then
                 { modelIn2 | editingSources = modelIn2.sources }
+                    |> updateControlsJson
 
             else
                 modelIn2
@@ -527,6 +542,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 , editingSrc = ""
                 , justAddedEditingRow = True
             }
+                |> updateControlsJson
                 |> withCmd
                     (delay 1 <| SelectEditingSrc "")
 
@@ -537,6 +553,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                         List.filter (\s -> s.src /= model.editingSrc) model.editingSources
                 , editingSrc = ""
             }
+                |> updateControlsJson
                 |> withNoCmd
 
         DisplayEditingSrc ->
@@ -568,6 +585,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                         , editingSources = editingSources
                         , src = editingSrc
                     }
+                        |> updateControlsJson
                         |> withNoCmd
 
         InputEditingName name ->
@@ -581,6 +599,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                                         { s | label = Just name }
                                         model.editingSources
                             }
+                                |> updateControlsJson
 
                         Nothing ->
                             model
@@ -603,10 +622,16 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     | editingSources = model.sources
                     , editingSrc = model.src
                 }
+                    |> updateControlsJson
                     |> withNoCmd
 
         DeleteAllEditingSources ->
             { model | editingSources = [ srcSource "" ] }
+                |> updateControlsJson
+                |> withNoCmd
+
+        InputControlsJson string ->
+            { model | controlsJson = string }
                 |> withNoCmd
 
         AddSourcePanel ->
@@ -636,6 +661,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     , editingSources = []
                     , editingSrc = ""
                 }
+                    |> updateControlsJson
                     |> withCmds [ cmd, clearKeys "", getIndexJson True ]
 
             else
@@ -719,6 +745,7 @@ maybeAddNewSources sources model =
             | editingSources = editingSources ++ newSources
             , lastSources = model.lastSources ++ newSources
         }
+            |> updateControlsJson
 
 
 delay : Int -> msg -> Cmd msg
@@ -1346,6 +1373,13 @@ viewEditingSources model =
                 [ viewSaveDeleteButtons model
                 , viewEditingSourcesInternal model
                 , viewSaveDeleteButtons model
+                , textarea
+                    [ style "min-height" "20em"
+                    , style "min-width" "40em"
+                    , onInput InputControlsJson
+                    , value model.controlsJson
+                    ]
+                    [ text model.controlsJson ]
                 ]
         ]
 
