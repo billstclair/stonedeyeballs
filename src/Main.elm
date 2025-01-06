@@ -1272,6 +1272,11 @@ h2 title =
     Html.h2 [] [ text title ]
 
 
+h3 : String -> Html Msg
+h3 title =
+    Html.h3 [] [ text title ]
+
+
 viewControls : Model -> Html Msg
 viewControls model =
     center []
@@ -1340,24 +1345,24 @@ viewEditingSources model =
 viewSourcePanels : Model -> Html Msg
 viewSourcePanels model =
     span []
-        [ h2 "Source Panels"
-        , p [] <|
-            List.concat
-                [ [ button AddSourcePanel "Add" ]
-                , [ table [ class "prettyTable" ] <|
-                        let
-                            viewRow html =
-                                tr [] [ td [] [ html ] ]
-                        in
-                        Dict.foldr
-                            (\name _ res ->
-                                (viewRow <| viewSourcePanel model name)
-                                    :: res
-                            )
-                            []
-                            model.sourcePanels
-                  ]
+        [ h3 "Source Panels"
+        , p []
+            [ p [] [ button AddSourcePanel "Add" ]
+            , p []
+                [ table [ class "prettyTable" ] <|
+                    let
+                        viewRow html =
+                            tr [] [ td [] [ html ] ]
+                    in
+                    Dict.foldr
+                        (\name _ res ->
+                            (viewRow <| viewSourcePanel model name)
+                                :: res
+                        )
+                        []
+                        model.sourcePanels
                 ]
+            ]
         ]
 
 
