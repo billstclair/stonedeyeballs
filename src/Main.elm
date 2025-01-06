@@ -325,6 +325,7 @@ type Msg
     | InputEditingName String
     | SaveRestoreEditingSources Bool
     | DeleteAllEditingSources
+    | AddSourcePanel
     | DeleteState
     | Process Value
 
@@ -606,6 +607,17 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model | editingSources = [ srcSource "" ] }
                 |> withNoCmd
 
+        AddSourcePanel ->
+            let
+                name =
+                    newSourcePanelName model.sourcePanels
+            in
+            { model
+                | sourcePanels =
+                    Dict.insert name [] model.sourcePanels
+            }
+                |> withNoCmd
+
         DeleteState ->
             if model.reallyDeleteState then
                 let
@@ -663,6 +675,11 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
                 Ok res ->
                     res
+
+
+newSourcePanelName : Dict String (List Source) -> String
+newSourcePanelName panelDict =
+    "new"
 
 
 maybeAddNewSources : List Source -> Model -> Model
@@ -1315,7 +1332,40 @@ viewEditingSources model =
                 [ viewSaveDeleteButtons model
                 , viewEditingSourcesInternal model
                 , viewSaveDeleteButtons model
+                , viewSourcePanels model
                 ]
+        ]
+
+
+viewSourcePanels : Model -> Html Msg
+viewSourcePanels model =
+    span []
+        [ h2 "Source Panels"
+        , p [] <|
+            List.concat
+                [ [ button AddSourcePanel "Add" ]
+                , [ table [ class "prettyTable" ] <|
+                        let
+                            viewRow html =
+                                tr [] [ td [] [ html ] ]
+                        in
+                        Dict.foldr
+                            (\name _ res ->
+                                (viewRow <| viewSourcePanel model name)
+                                    :: res
+                            )
+                            []
+                            model.sourcePanels
+                  ]
+                ]
+        ]
+
+
+viewSourcePanel : Model -> String -> Html Msg
+viewSourcePanel model name =
+    span []
+        [ text " "
+        , text name
         ]
 
 
