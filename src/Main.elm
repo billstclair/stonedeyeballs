@@ -607,7 +607,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             if savep then
                 case JD.decodeString sourcesDecoder model.controlsJson of
                     Ok sources ->
-                        { model | sources = sources }
+                        { model | editingSources = sources }
                             |> withNoCmd
 
                     Err e ->
