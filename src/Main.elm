@@ -331,6 +331,7 @@ type Msg
     | InputEditingSrc String
     | InputEditingName String
     | SaveRestoreEditingSources Bool
+    | SaveRestoreControlsJson Bool
     | DeleteAllEditingSources
     | InputControlsJson String
     | AddSourcePanel
@@ -601,6 +602,21 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     model
             )
                 |> withNoCmd
+
+        SaveRestoreControlsJson savep ->
+            if savep then
+                case JD.decodeString sourcesDecoder model.controlsJson of
+                    Ok sources ->
+                        { model | sources = sources }
+                            |> withNoCmd
+
+                    Err e ->
+                        { model | err = Just <| JD.errorToString e }
+                            |> withNoCmd
+
+            else
+                { model | controlsJson = computeControlsJson model.editingSources }
+                    |> withNoCmd
 
         SaveRestoreEditingSources savep ->
             if savep then
@@ -1369,13 +1385,30 @@ viewEditingSources model =
                 [ viewSaveDeleteButtons model
                 , viewEditingSourcesInternal model
                 , viewSaveDeleteButtons model
-                , textarea
-                    [ style "min-height" "20em"
-                    , style "width" "95%"
-                    , onInput InputControlsJson
-                    , value model.controlsJson
+                , let
+                    controlsJson =
+                        computeControlsJson model.editingSources
+
+                    sourcesResult =
+                        JD.decodeString sourcesDecoder model.controlsJson
+                  in
+                  p []
+                    [ enabledButton (sourcesResult /= Ok model.editingSources)
+                        (SaveRestoreControlsJson True)
+                        "Save"
+                    , text " "
+                    , enabledButton (controlsJson /= model.controlsJson)
+                        (SaveRestoreControlsJson False)
+                        "Restore"
+                    , br
+                    , textarea
+                        [ style "min-height" "20em"
+                        , style "width" "95%"
+                        , onInput InputControlsJson
+                        , value model.controlsJson
+                        ]
+                        [ text model.controlsJson ]
                     ]
-                    [ text model.controlsJson ]
                 ]
         ]
 
