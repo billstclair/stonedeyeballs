@@ -93,15 +93,8 @@ saveModel : Model -> Cmd Msg
 saveModel model =
     put "model"
         (modelToSavedModel model
-            |> Debug.log "  SavedModel"
+            --|> Debug.log "  SavedModel"
             |> encodeSavedModel
-            |> (\sm ->
-                    let
-                        e =
-                            Debug.log "sm" <| JE.encode 2 sm
-                    in
-                    sm
-               )
             |> Just
         )
 
@@ -1171,11 +1164,12 @@ viewInternal model =
           )
             ([ [ src modelSrc
                , style "text-align" "center"
-               , if isImage then
-                    onClick MouseDown
+               , onClick MouseDown
+               , if not isImage then
+                    style "height" "max-content"
 
                  else
-                    style "height" "max-content"
+                    style "" ""
                , style "max-height" "500px"
                ]
              , if isImage then
@@ -1188,6 +1182,8 @@ viewInternal model =
             )
             []
         , br
+        , text (String.fromInt index)
+        , text ": "
         , if isImage then
             text name
 
@@ -1429,8 +1425,8 @@ viewEditingSourcesInternal model =
     in
     span []
         [ table [ class "prettytable" ] <|
-            List.map
-                (\s ->
+            List.indexedMap
+                (\idx s ->
                     tr
                         [ onClick <|
                             if not model.justAddedEditingRow then
@@ -1441,7 +1437,9 @@ viewEditingSourcesInternal model =
                         ]
                         [ td []
                             [ span []
-                                [ if s.src == model.editingSrc then
+                                [ text <| String.fromInt idx
+                                , text ": "
+                                , if s.src == model.editingSrc then
                                     span []
                                         [ button AddEditingSrc "Add"
                                         , text " "
