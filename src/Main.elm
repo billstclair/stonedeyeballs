@@ -1391,9 +1391,17 @@ viewEditingSources model =
 
                     sourcesResult =
                         JD.decodeString sourcesDecoder model.controlsJson
+
+                    saveOk =
+                        case sourcesResult of
+                            Ok _ ->
+                                True
+
+                            Err _ ->
+                                False
                   in
                   p []
-                    [ enabledButton (sourcesResult /= Ok model.editingSources)
+                    [ enabledButton (saveOk && (sourcesResult /= Ok model.editingSources))
                         (SaveRestoreControlsJson True)
                         "Save"
                     , text " "
