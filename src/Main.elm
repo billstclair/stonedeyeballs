@@ -4,6 +4,8 @@ module Main exposing (main)
 
 Add save/restore area for lists of urls.
 
+Optional URL to go with image, defaults to the image itself.
+
 -}
 
 import AssocSet as AS exposing (Set)
@@ -1163,8 +1165,11 @@ viewInternal model =
             else
                 "images/" ++ model.src
 
+        fileUrlType =
+            urlType modelSrc
+
         isImage =
-            List.member (urlType modelSrc) imgTypes
+            List.member fileUrlType imgTypes
     in
     div
         [ style "text-align" "center"
@@ -1200,15 +1205,11 @@ viewInternal model =
         , br
         , text (String.fromInt index)
         , text ": "
-        , if isImage then
-            text name
-
-          else
-            a
-                [ href modelSrc
-                , target "_blank"
-                ]
-                [ text name ]
+        , a
+            [ href modelSrc
+            , target "_blank"
+            ]
+            [ text <| name ++ " (" ++ fileUrlType ++ ")" ]
         , p []
             (List.indexedMap
                 (\idx s ->
