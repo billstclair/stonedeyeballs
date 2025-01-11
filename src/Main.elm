@@ -70,7 +70,7 @@ type alias Model =
     , lastSources : List Source
     , src : String
     , editingSources : List Source
-    , editingSrc : String
+    , editingSrcIdx : Int
     , sourcePanels : List SourcePanel
     , editingPanelIdx : Int
     , justAddedEditingRow : Bool
@@ -94,7 +94,7 @@ type alias SavedModel =
     , lastSources : List Source
     , src : String
     , editingSources : List Source
-    , editingSrc : String
+    , editingSrcIdx : Int
     , sourcePanels : List SourcePanel
     , editingPanelIdx : Int
     , switchPeriod : String
@@ -121,7 +121,7 @@ modelToSavedModel model =
     , lastSources = model.lastSources
     , src = model.src
     , editingSources = model.editingSources
-    , editingSrc = model.editingSrc
+    , editingSrcIdx = model.editingSrcIdx
     , sourcePanels = model.sourcePanels
     , editingPanelIdx = model.editingPanelIdx
     , switchPeriod = model.switchPeriod
@@ -139,7 +139,7 @@ savedModelToModel savedModel model =
         , lastSources = savedModel.lastSources
         , src = savedModel.src
         , editingSources = savedModel.editingSources
-        , editingSrc = savedModel.editingSrc
+        , editingSrcIdx = savedModel.editingSrcIdx
         , sourcePanels = savedModel.sourcePanels
         , editingPanelIdx = savedModel.editingPanelIdx
         , switchPeriod = savedModel.switchPeriod
@@ -158,7 +158,7 @@ savedModelDecoder =
         |> optional "lastSources" sourcesDecoder []
         |> required "src" JD.string
         |> optional "editingSources" sourcesDecoder []
-        |> optional "editingSrc" JD.string ""
+        |> optional "editingSrcIdx" JD.int -1
         |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
         |> optional "editingPanelIdx" JD.int -1
         |> optional "switchPeriod" JD.string "5"
@@ -238,7 +238,7 @@ encodeSavedModel savedModel =
         , ( "lastSources", JE.list encodeSource savedModel.lastSources )
         , ( "src", JE.string savedModel.src )
         , ( "editingSources", JE.list encodeSource savedModel.editingSources )
-        , ( "editingSrc", JE.string savedModel.editingSrc )
+        , ( "editingSrcIdx", JE.int savedModel.editingSrcIdx )
         , ( "sourcePanels", JE.list encodeSourcePanel savedModel.sourcePanels )
         , ( "editingPanelIdx", JE.int savedModel.editingPanelIdx )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
@@ -271,7 +271,7 @@ init =
       , lastSources = [ stonedEyeballsSource ]
       , src = stonedEyeballsUrl
       , editingSources = []
-      , editingSrc = ""
+      , editingSrcIdx = -1
       , sourcePanels = []
       , editingPanelIdx = -1
       , justAddedEditingRow = False
@@ -365,7 +365,7 @@ type Msg
     | ToggleControls
     | ToggleShowEditingSources
     | ToggleMergeEditingSources
-    | SelectEditingSrc String
+    | SelectEditingSrc Int
     | AddEditingSrc
     | DeleteEditingSrc
     | DisplayEditingSrc
@@ -552,13 +552,18 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model
                 | showControls =
                     not model.showControls
-                , editingSrc =
+                , editingSrcIdx =
                     Debug.log "ToggleControls, editingSrc" <|
                         if model.showControls then
-                            model.editingSrc
+                            model.editingSrcIdx
 
                         else
-                            model.src
+                            case LE.findIndex (\s -> s.src == model.src) model.sources of
+                                Just idx ->
+                                    idx
+
+                                Nothing ->
+                                    -1
             }
                 |> withNoCmd
 
@@ -570,115 +575,126 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model | mergeEditingSources = not model.mergeEditingSources }
                 |> withNoCmd
 
-        SelectEditingSrc src ->
+        SelectEditingSrc idx ->
             { model
-                | editingSrc = Debug.log "SelectEditingSrc" src
-                , src = src
+                | editingSrcIdx = Debug.log "SelectEditingSrc" idx
+                , src =
+                    case LE.getAt idx model.sources of
+                        Just source ->
+                            source.src
+
+                        Nothing ->
+                            ""
             }
                 |> withNoCmd
 
         AddEditingSrc ->
             let
                 ( head, tail ) =
-                    headTail model.editingSrc model.editingSources
+                    headTail model.editingSrcIdx model.editingSources
+
+                idx =
+                    List.length head
             in
             { model
                 | editingSources = head ++ [ srcSource "" ] ++ tail
-                , editingSrc = ""
+                , editingSrcIdx = idx
                 , justAddedEditingRow = True
             }
                 |> updateControlsJson
                 |> withCmd
-                    (delay 1 <| SelectEditingSrc "")
+                    (delay 1 <| SelectEditingSrc idx)
 
         DeleteEditingSrc ->
-            { model
-                | editingSources =
-                    Debug.log "DeleteEditingSrc, sources:" <|
-                        List.filter (\s -> s.src /= model.editingSrc) model.editingSources
-                , editingSrc = ""
-            }
-                |> updateControlsJson
-                |> withNoCmd
+            let
+                m =
+                    { model
+                        | editingSources =
+                            LE.removeAt model.editingSrcIdx model.editingSources
+                        , editingSrcIdx = -1
+                    }
+                        |> updateControlsJson
+
+                i =
+                    Debug.log "DeleteEditingSrc, editingSrcIdx" m.editingSrcIdx
+            in
+            m |> withNoCmd
 
         DisplayEditingSrc ->
-            { model | src = model.editingSrc }
-                |> withNoCmd
+            case LE.getAt model.editingSrcIdx model.sources of
+                Just source ->
+                    { model | src = source.src } |> withNoCmd
+
+                Nothing ->
+                    model |> withNoCmd
 
         InputEditingSrc editingSrc ->
             let
                 _ =
                     Debug.log "InputEditingSrc" editingSrc
             in
-            case LE.findIndex (\a -> a.src == model.editingSrc) model.editingSources of
+            case LE.getAt model.editingSrcIdx model.editingSources of
                 Nothing ->
-                    { model
-                        | editingSrc = editingSrc
-                        , src = editingSrc
-                    }
+                    model
                         |> withNoCmd
 
-                Just editingSrcIdx ->
+                Just source ->
                     let
                         editingSources =
-                            LE.setAt editingSrcIdx
-                                (srcSource editingSrc)
+                            LE.setAt model.editingSrcIdx
+                                { source | src = editingSrc }
                                 model.editingSources
                     in
                     { model
-                        | editingSrc = editingSrc
-                        , editingSources = editingSources
-                        , src = editingSrc
+                        | editingSources = editingSources
+                        , src = source.src
                     }
                         |> updateControlsJson
                         |> withNoCmd
 
         InputEditingName name ->
-            (case LE.findIndex (\s -> s.src == model.editingSrc) model.editingSources of
-                Just i ->
-                    case LE.getAt i model.editingSources of
-                        Just s ->
-                            { model
-                                | editingSources =
-                                    LE.setAt i
-                                        { s | label = Just name }
-                                        model.editingSources
-                            }
-                                |> updateControlsJson
-
-                        Nothing ->
-                            model
-
+            (case LE.getAt model.editingSrcIdx model.editingSources of
                 Nothing ->
                     model
+
+                Just s ->
+                    { model
+                        | editingSources =
+                            LE.setAt model.editingSrcIdx
+                                { s
+                                    | label =
+                                        if name == "" then
+                                            Nothing
+
+                                        else
+                                            Just name
+                                }
+                                model.editingSources
+                    }
+                        |> updateControlsJson
             )
                 |> withNoCmd
 
         InputEditingUrl url ->
-            (case LE.findIndex (\s -> s.src == model.editingSrc) model.editingSources of
-                Just i ->
-                    case LE.getAt i model.editingSources of
-                        Just s ->
-                            { model
-                                | editingSources =
-                                    LE.setAt i
-                                        { s
-                                            | url =
-                                                if url == "" then
-                                                    Nothing
-
-                                                else
-                                                    Just url
-                                        }
-                                        model.editingSources
-                            }
-                                |> updateControlsJson
-
-                        Nothing ->
-                            model
-
+            (case LE.getAt model.editingSrcIdx model.editingSources of
                 Nothing ->
                     model
+
+                Just s ->
+                    { model
+                        | editingSources =
+                            LE.setAt model.editingSrcIdx
+                                { s
+                                    | url =
+                                        if url == "" then
+                                            Nothing
+
+                                        else
+                                            Just url
+                                }
+                                model.editingSources
+                    }
+                        |> updateControlsJson
             )
                 |> withNoCmd
 
@@ -701,14 +717,20 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             if savep then
                 { model
                     | sources = model.editingSources
-                    , src = model.editingSrc
+                    , src =
+                        case LE.getAt model.editingSrcIdx model.editingSources of
+                            Just source ->
+                                source.src
+
+                            Nothing ->
+                                ""
                 }
                     |> withNoCmd
 
             else
                 { model
                     | editingSources = model.sources
-                    , editingSrc = model.src
+                    , editingSrcIdx = LE.findIndex (\s -> s.src == model.src) model.sources |> Maybe.withDefault -1
                 }
                     |> updateControlsJson
                     |> withNoCmd
@@ -788,7 +810,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     | reallyDeleteState = False
                     , started = Started
                     , editingSources = []
-                    , editingSrc = ""
+                    , editingSrcIdx = -1
                 }
                     |> updateControlsJson
                     |> withCmds [ cmd, clearKeys "", getIndexJson True ]
@@ -922,22 +944,13 @@ dropN n list =
         dropN (n - 1) <| cdr list
 
 
-headTail : String -> List Source -> ( List Source, List Source )
-headTail editingSrc editingSources =
-    -- TODO
+headTail : Int -> List Source -> ( List Source, List Source )
+headTail idx editingSources =
     let
-        head =
-            LE.takeWhile (\a -> a.src /= editingSrc) editingSources
+        i =
+            idx + 1
     in
-    case dropN (List.length head) editingSources of
-        [] ->
-            ( head, [] )
-
-        [ es ] ->
-            ( head ++ [ es ], [] )
-
-        es :: rest ->
-            ( head ++ [ es ], rest )
+    ( List.take i editingSources, List.drop i editingSources )
 
 
 {-| The `model` parameter is necessary here for `PortFunnels.makeFunnelDict`.
@@ -1138,7 +1151,7 @@ digitKey digit modelIn =
 nextImage : Model -> Model
 nextImage model =
     viewImage model
-        (case LE.findIndex (\idx -> idx.src == model.src) model.sources of
+        (case LE.findIndex (\source -> source.src == model.src) model.sources of
             Just idx ->
                 idx + 1
 
@@ -1660,24 +1673,26 @@ viewSourcePanel model idx panel =
 viewEditingSourcesInternal : Model -> Html Msg
 viewEditingSourcesInternal model =
     let
+        sources : List Source
         sources =
             case model.editingSources of
                 [] ->
                     model.sources
 
-                s ->
-                    s
+                ss ->
+                    ss
     in
     span []
         [ text "Text boxes are: display, label, url"
         , br
         , table [ class "prettytable" ] <|
-            List.indexedMap
-                (\idx s ->
+            let
+                viewSource : Int -> Source -> Html Msg
+                viewSource idx source =
                     tr
                         [ onClick <|
-                            if not model.justAddedEditingRow then
-                                SelectEditingSrc s.src
+                            if not model.justAddedEditingRow && idx /= model.editingSrcIdx then
+                                SelectEditingSrc idx
 
                             else
                                 Noop
@@ -1686,13 +1701,13 @@ viewEditingSourcesInternal model =
                             [ span []
                                 [ text <| String.fromInt idx
                                 , text ": "
-                                , if s.src == model.editingSrc then
+                                , if idx == model.editingSrcIdx then
                                     span []
                                         [ button AddEditingSrc "Add"
                                         , text " "
                                         , button DeleteEditingSrc "Delete"
                                         , text " "
-                                        , if model.src /= model.editingSrc then
+                                        , if model.src /= source.src then
                                             span []
                                                 [ button DisplayEditingSrc "Display"
                                                 , text " "
@@ -1703,25 +1718,25 @@ viewEditingSourcesInternal model =
                                         , input
                                             [ onInput InputEditingSrc
                                             , width 30
-                                            , value s.src
+                                            , value source.src
                                             , style "min-height" "1em"
                                             , style "min-width" "20em"
                                             ]
-                                            [ text s.src ]
+                                            [ text source.src ]
                                         , text " "
                                         , input
                                             [ onInput InputEditingName
                                             , width 20
-                                            , value <| sourceLabel s
+                                            , value <| sourceLabel source
                                             ]
-                                            [ text s.src ]
+                                            [ text source.src ]
                                         , text " "
                                         , input
                                             [ onInput InputEditingUrl
                                             , width 20
-                                            , value <| sourceUrl s
+                                            , value <| sourceUrl source
                                             ]
-                                            [ text <| sourceUrl s ]
+                                            [ text <| sourceUrl source ]
                                         ]
 
                                   else
@@ -1730,17 +1745,17 @@ viewEditingSourcesInternal model =
                                         , style "min-width" "30em"
                                         ]
                                         [ text <|
-                                            if s.src == "" then
+                                            if source.src == "" then
                                                 special.nbsp
 
                                             else
-                                                s.src
+                                                source.src
                                         ]
                                 ]
                             ]
                         ]
-                )
-                sources
+            in
+            List.indexedMap viewSource sources
         ]
 
 
