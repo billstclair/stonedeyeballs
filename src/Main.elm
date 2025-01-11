@@ -14,7 +14,7 @@ import Browser.Events as Events exposing (Visibility(..))
 import Browser.Navigation as Navigation exposing (Key)
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
-import Html exposing (Attribute, Html, a, div, embed, hr, img, input, p, span, table, td, text, textarea, tr)
+import Html exposing (Attribute, Html, a, div, embed, hr, img, input, p, span, table, td, text, textarea, th, tr)
 import Html.Attributes exposing (checked, class, disabled, height, href, property, src, style, target, title, type_, value, width)
 import Html.Events exposing (onClick, onInput)
 import Http
@@ -356,6 +356,10 @@ type Msg
     | DeleteAllEditingSources
     | InputControlsJson String
     | AddSourcePanel
+    | SaveRestoreSourcePanel Bool
+    | DeleteSourcePanel
+    | SelectEditingPanel String
+    | InputEditingPanelName String
     | ReloadFromServer
     | DeleteState
     | Process Value
@@ -484,20 +488,25 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             ( { model | visibility = Debug.log "visibility" v }, Cmd.none )
 
         OnKeyPress isDown doDigits key ->
+            let
+                ( leftKeys, rightKeys ) =
+                    if model.showControls then
+                        ( [ "ArrowLeft" ]
+                        , [ "ArrowRight" ]
+                        )
+
+                    else
+                        ( [ "ArrowLeft", "j", "J", "d", "D", "s", "S" ]
+                        , [ "ArrowRight", "l", "L", "k", "K", "f", "F" ]
+                        )
+            in
             if not isDown then
                 model |> withNoCmd
 
-            else
-            --let
-            --k =
-            --    Debug.log "KeyDown" key
-            --in
-            if
-                List.member key [ "ArrowLeft", "j", "J", "d", "s", "S" ]
-            then
+            else if List.member key leftKeys then
                 prevImage model |> withNoCmd
 
-            else if List.member key [ "ArrowRight", "l", "k", "f", "F" ] then
+            else if List.member key rightKeys then
                 nextImage model |> withNoCmd
 
             else if doDigits && key >= "0" && key <= "9" then
@@ -700,8 +709,47 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model
                 | sourcePanels =
                     Dict.insert name model.editingSources model.sourcePanels
+                , editingPanel =
+                    name
             }
                 |> withNoCmd
+
+        SaveRestoreSourcePanel savep ->
+            (if savep then
+                case Dict.get model.editingPanel model.sourcePanels of
+                    Just sources ->
+                        { model | editingSources = sources }
+
+                    Nothing ->
+                        model
+
+             else
+                { model | sourcePanels = Dict.insert model.editingPanel model.editingSources model.sourcePanels }
+            )
+                |> withNoCmd
+
+        DeleteSourcePanel ->
+            { model | sourcePanels = Dict.remove model.editingPanel model.sourcePanels }
+                |> withNoCmd
+
+        SelectEditingPanel name ->
+            { model
+                | editingPanel = name
+            }
+                |> withNoCmd
+
+        InputEditingPanelName name ->
+            case Dict.get model.editingPanel model.sourcePanels of
+                Nothing ->
+                    model |> withNoCmd
+
+                Just sources ->
+                    { model
+                        | sourcePanels =
+                            Dict.insert name sources <| Dict.remove model.editingPanel model.sourcePanels
+                        , editingPanel = name
+                    }
+                        |> withNoCmd
 
         ReloadFromServer ->
             model
@@ -769,7 +817,16 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
 newSourcePanelName : Dict String (List Source) -> String
 newSourcePanelName panelDict =
-    "new"
+    let
+        loop : Int -> String -> String
+        loop index name =
+            if Dict.member name panelDict then
+                loop (index + 1) ("new" ++ String.fromInt index)
+
+            else
+                name
+    in
+    loop 1 "new"
 
 
 maybeAddNewSources : List Source -> Model -> Model
@@ -1318,7 +1375,15 @@ viewInternal model =
                 model.sources
             )
         , p []
-            [ text "Click on the image to change. Or press s/f, j/l, arrows, or digit links above."
+            [ let
+                keys =
+                    if model.showControls then
+                        "arrows"
+
+                    else
+                        "s/f, j/l, arrows,"
+              in
+              text <| "Click on the image to change. Or press " ++ keys ++ " or digit links above."
             , br
             , checkBox ToggleSwitchEnabled
                 model.switchEnabled
@@ -1495,13 +1560,9 @@ viewSourcePanels model =
             [ p [] [ button AddSourcePanel "Add" ]
             , p []
                 [ table [ class "prettyTable" ] <|
-                    let
-                        viewRow html =
-                            tr [] [ td [] [ html ] ]
-                    in
                     Dict.foldr
                         (\name _ res ->
-                            (viewRow <| viewSourcePanel model name)
+                            viewSourcePanel model name
                                 :: res
                         )
                         []
@@ -1514,32 +1575,56 @@ viewSourcePanels model =
 viewSourcePanel : Model -> String -> Html Msg
 viewSourcePanel model name =
     let
-        ( names, panelLength ) =
+        ( names, panels ) =
             case Dict.get name model.sourcePanels of
                 Just sources ->
-                    ( List.take 2 sources |> List.map .src |> List.intersperse ", ", List.length sources )
+                    ( List.take 2 sources |> List.map .src |> List.intersperse ", ", sources )
 
                 Nothing ->
-                    ( [], 0 )
+                    ( [], [] )
+
+        canSave =
+            panels /= model.editingSources
+
+        isEditing =
+            name == model.editingPanel
     in
-    span [] <|
-        List.concat
-            [ [ text " "
-              , b name
-              , if names == [] then
-                    text ""
+    tr [ onClick <| SelectEditingPanel name ]
+        [ th []
+            [ if not isEditing then
+                text name
 
-                else
-                    text ": "
-              ]
-            , List.map text names
-            , [ if List.length names < panelLength then
-                    text ", ..."
-
-                else
-                    text ""
-              ]
+              else
+                span []
+                    [ input
+                        [ onInput InputEditingPanelName
+                        , width 10
+                        , value name
+                        , style "min-height" "1em"
+                        , style "min-width" "10em"
+                        ]
+                        [ text name ]
+                    , text " "
+                    , enabledButton canSave (SaveRestoreSourcePanel True) "Save"
+                    , text " "
+                    , enabledButton canSave (SaveRestoreSourcePanel False) "Restore"
+                    , text " "
+                    , button DeleteSourcePanel "Delete"
+                    , text " "
+                    , button AddSourcePanel "Add"
+                    ]
             ]
+        , td [] <|
+            List.concat
+                [ List.map text names
+                , [ if List.length names < List.length panels then
+                        text ", ..."
+
+                    else
+                        text ""
+                  ]
+                ]
+        ]
 
 
 viewEditingSourcesInternal : Model -> Html Msg
