@@ -4,7 +4,8 @@ module Main exposing (main)
 
 Add save/restore area for lists of urls.
 
-Optional URL to go with image, defaults to the image itself.
+JSON should be updated after index.json is merged.
+This may mean that editingSources is set too soon.
 
 -}
 
@@ -606,19 +607,13 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     (delay 1 <| SelectEditingSrc idx)
 
         DeleteEditingSrc ->
-            let
-                m =
-                    { model
-                        | editingSources =
-                            LE.removeAt model.editingSrcIdx model.editingSources
-                        , editingSrcIdx = -1
-                    }
-                        |> updateControlsJson
-
-                i =
-                    Debug.log "DeleteEditingSrc, editingSrcIdx" m.editingSrcIdx
-            in
-            m |> withNoCmd
+            { model
+                | editingSources =
+                    LE.removeAt model.editingSrcIdx model.editingSources
+                , editingSrcIdx = -1
+            }
+                |> updateControlsJson
+                |> withNoCmd
 
         DisplayEditingSrc ->
             case LE.getAt model.editingSrcIdx model.sources of
@@ -843,7 +838,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                                 model
                                     |> maybeAddNewSources sources
                     in
-                    mdl |> withNoCmd
+                    mdl |> updateControlsJson |> withNoCmd
 
         Process value ->
             case
