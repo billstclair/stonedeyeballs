@@ -34,6 +34,7 @@ import Url
 type alias Source =
     { src : String
     , label : Maybe String
+    , url : Maybe String
     }
 
 
@@ -47,9 +48,14 @@ sourceLabel s =
             getNameFromFileName s.src
 
 
-source : String -> Maybe String -> Source
-source =
-    Source
+sourceUrl : Source -> String
+sourceUrl s =
+    case s.url of
+        Just url ->
+            url
+
+        Nothing ->
+            ""
 
 
 type alias Model =
@@ -165,33 +171,38 @@ sourceDecoder =
         , JD.succeed Source
             |> required "src" JD.string
             |> optional "label" (JD.nullable JD.string) Nothing
+            |> optional "url" (JD.nullable JD.string) Nothing
         ]
 
 
 encodeSource : Source -> Value
-encodeSource { src, label } =
-    if label == Nothing then
+encodeSource { src, label, url } =
+    if (label == Nothing || label == Just "") && (url == Nothing || url == Just "") then
         JE.string src
 
     else
-        JE.object
-            [ ( "src", JE.string src )
-            , ( "label"
-              , case label of
-                    Just l ->
-                        if
-                            (l == "")
-                                || (l == (srcSource src |> sourceLabel))
-                        then
-                            JE.null
-
-                        else
-                            JE.string l
-
+        JE.object <|
+            List.concat
+                [ [ ( "src", JE.string src ) ]
+                , case label of
                     Nothing ->
-                        JE.null
-              )
-            ]
+                        []
+
+                    Just "" ->
+                        []
+
+                    Just l ->
+                        [ ( "label", JE.string l ) ]
+                , case url of
+                    Nothing ->
+                        []
+
+                    Just "" ->
+                        []
+
+                    Just u ->
+                        [ ( "url", JE.string u ) ]
+                ]
 
 
 encodeSavedModel : SavedModel -> Value
@@ -223,7 +234,7 @@ stonedEyeballsSource =
 
 srcSource : String -> Source
 srcSource src =
-    { src = src, label = Nothing }
+    { src = src, label = Nothing, url = Nothing }
 
 
 init : ( Model, Cmd Msg )
@@ -332,6 +343,7 @@ type Msg
     | DisplayEditingSrc
     | InputEditingSrc String
     | InputEditingName String
+    | InputEditingUrl String
     | SaveRestoreEditingSources Bool
     | SaveRestoreControlsJson Bool
     | DeleteAllEditingSources
@@ -593,6 +605,34 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                                 | editingSources =
                                     LE.setAt i
                                         { s | label = Just name }
+                                        model.editingSources
+                            }
+                                |> updateControlsJson
+
+                        Nothing ->
+                            model
+
+                Nothing ->
+                    model
+            )
+                |> withNoCmd
+
+        InputEditingUrl url ->
+            (case LE.findIndex (\s -> s.src == model.editingSrc) model.editingSources of
+                Just i ->
+                    case LE.getAt i model.editingSources of
+                        Just s ->
+                            { model
+                                | editingSources =
+                                    LE.setAt i
+                                        { s
+                                            | url =
+                                                if url == "" then
+                                                    Nothing
+
+                                                else
+                                                    Just url
+                                        }
                                         model.editingSources
                             }
                                 |> updateControlsJson
@@ -1156,7 +1196,7 @@ viewInternal model =
                     i
 
                 Nothing ->
-                    0
+                    -1
 
         modelSrc =
             if String.startsWith "http" model.src then
@@ -1164,6 +1204,23 @@ viewInternal model =
 
             else
                 "images/" ++ model.src
+
+        url =
+            case LE.getAt index model.sources of
+                Just source ->
+                    case source.url of
+                        Nothing ->
+                            modelSrc
+
+                        Just u ->
+                            if u == "" then
+                                modelSrc
+
+                            else
+                                u
+
+                Nothing ->
+                    modelSrc
 
         fileUrlType =
             urlType modelSrc
@@ -1177,7 +1234,8 @@ viewInternal model =
         , style "max-height" "60em"
         , style "overflow" "auto"
         ]
-        [ (if isImage then
+        [ h2 "Stoned Eyeballs"
+        , (if isImage then
             img
 
            else
@@ -1206,10 +1264,10 @@ viewInternal model =
         , text (String.fromInt index)
         , text ": "
         , a
-            [ href modelSrc
+            [ href url
             , target "_blank"
             ]
-            [ text <| name ++ " (" ++ fileUrlType ++ ")" ]
+            [ text <| name ++ " (" ++ urlType url ++ ")" ]
         , p []
             (List.indexedMap
                 (\idx s ->
@@ -1466,7 +1524,9 @@ viewEditingSourcesInternal model =
                     s
     in
     span []
-        [ table [ class "prettytable" ] <|
+        [ text "Text boxes are: display, label, url"
+        , br
+        , table [ class "prettytable" ] <|
             List.indexedMap
                 (\idx s ->
                     tr
@@ -1510,6 +1570,13 @@ viewEditingSourcesInternal model =
                                             , value <| sourceLabel s
                                             ]
                                             [ text s.src ]
+                                        , text " "
+                                        , input
+                                            [ onInput InputEditingUrl
+                                            , width 20
+                                            , value <| sourceUrl s
+                                            ]
+                                            [ text <| sourceUrl s ]
                                         ]
 
                                   else
