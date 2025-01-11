@@ -1506,6 +1506,29 @@ viewSourcePanels model =
 
 viewSourcePanel : Model -> String -> Html Msg
 viewSourcePanel model name =
+    let
+        names =
+            case Dict.get name model.sourcePanels of
+                Just sources ->
+                    List.take 2 sources |> List.map .src |> List.intersperse ","
+
+                Nothing ->
+                    []
+
+        viewName n =
+            span [] <|
+                List.concat
+                    [ [ text ", "
+                      , text n
+                      , if names == [] then
+                            text ""
+
+                        else
+                            text ":"
+                      ]
+                    , List.map text names
+                    ]
+    in
     span []
         [ text " "
         , text name
