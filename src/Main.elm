@@ -1347,7 +1347,7 @@ viewInternal model =
             , p []
                 [ text "Copyright "
                 , text special.copyright
-                , text "2024, "
+                , text "2024-2025, "
                 , a
                     [ href "https://billstclair.com/"
                     , target "_blank"
