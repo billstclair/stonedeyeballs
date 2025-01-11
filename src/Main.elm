@@ -152,6 +152,14 @@ savedModelToModel savedModel model =
         |> updateControlsJson
 
 
+idxDecoder : Int -> Decoder Int
+idxDecoder default =
+    JD.oneOf
+        [ JD.int
+        , JD.succeed default
+        ]
+
+
 savedModelDecoder : Decoder SavedModel
 savedModelDecoder =
     JD.succeed SavedModel
@@ -159,9 +167,9 @@ savedModelDecoder =
         |> optional "lastSources" sourcesDecoder []
         |> required "src" JD.string
         |> optional "editingSources" sourcesDecoder []
-        |> optional "editingSrcIdx" JD.int -1
+        |> optional "editingSrcIdx" (idxDecoder -1) -1
         |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
-        |> optional "editingPanelIdx" JD.int -1
+        |> optional "editingPanelIdx" (idxDecoder -1) -1
         |> optional "switchPeriod" JD.string "5"
         |> required "switchEnabled" JD.bool
         |> optional "showControls" JD.bool False
