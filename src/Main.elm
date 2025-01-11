@@ -72,7 +72,7 @@ type alias Model =
     , editingSources : List Source
     , editingSrc : String
     , sourcePanels : List SourcePanel
-    , editingPanel : String
+    , editingPanelIdx : Int
     , justAddedEditingRow : Bool
     , time : Int
     , lastSwapTime : Int
@@ -96,7 +96,7 @@ type alias SavedModel =
     , editingSources : List Source
     , editingSrc : String
     , sourcePanels : List SourcePanel
-    , editingPanel : String
+    , editingPanelIdx : Int
     , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
@@ -123,7 +123,7 @@ modelToSavedModel model =
     , editingSources = model.editingSources
     , editingSrc = model.editingSrc
     , sourcePanels = model.sourcePanels
-    , editingPanel = model.editingPanel
+    , editingPanelIdx = model.editingPanelIdx
     , switchPeriod = model.switchPeriod
     , switchEnabled = model.switchEnabled
     , showControls = model.showControls
@@ -141,7 +141,7 @@ savedModelToModel savedModel model =
         , editingSources = savedModel.editingSources
         , editingSrc = savedModel.editingSrc
         , sourcePanels = savedModel.sourcePanels
-        , editingPanel = savedModel.editingPanel
+        , editingPanelIdx = savedModel.editingPanelIdx
         , switchPeriod = savedModel.switchPeriod
         , switchEnabled = savedModel.switchEnabled
         , showControls = savedModel.showControls
@@ -160,7 +160,7 @@ savedModelDecoder =
         |> optional "editingSources" sourcesDecoder []
         |> optional "editingSrc" JD.string ""
         |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
-        |> optional "editingPanel" JD.string ""
+        |> optional "editingPanelIdx" JD.int -1
         |> optional "switchPeriod" JD.string "5"
         |> required "switchEnabled" JD.bool
         |> optional "showControls" JD.bool False
@@ -240,7 +240,7 @@ encodeSavedModel savedModel =
         , ( "editingSources", JE.list encodeSource savedModel.editingSources )
         , ( "editingSrc", JE.string savedModel.editingSrc )
         , ( "sourcePanels", JE.list encodeSourcePanel savedModel.sourcePanels )
-        , ( "editingPanel", JE.string savedModel.editingPanel )
+        , ( "editingPanelIdx", JE.int savedModel.editingPanelIdx )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
@@ -273,7 +273,7 @@ init =
       , editingSources = []
       , editingSrc = ""
       , sourcePanels = []
-      , editingPanel = ""
+      , editingPanelIdx = -1
       , justAddedEditingRow = False
       , time = 0
       , lastSwapTime = 0
@@ -379,7 +379,7 @@ type Msg
     | AddSourcePanel
     | SaveRestoreSourcePanel Bool
     | DeleteSourcePanel
-    | SelectEditingPanel String
+    | SelectEditingPanel Int
     | InputEditingPanelName String
     | ReloadFromServer
     | DeleteState
@@ -730,14 +730,14 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model
                 | sourcePanels =
                     { name = name, panels = model.editingSources } :: model.sourcePanels
-                , editingPanel =
-                    name
+                , editingPanelIdx =
+                    0
             }
                 |> withNoCmd
 
         SaveRestoreSourcePanel savep ->
             (if savep then
-                case getSourcePanel model.editingPanel model.sourcePanels of
+                case getSourcePanel model.editingPanelIdx model.sourcePanels of
                     Just sources ->
                         { model | editingSources = sources }
 
@@ -747,31 +747,30 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
              else
                 { model
                     | sourcePanels =
-                        LE.updateIf (\p -> p.name == model.editingPanel) (\p -> { p | panels = model.editingSources }) model.sourcePanels
+                        LE.updateAt model.editingPanelIdx (\p -> { p | panels = model.editingSources }) model.sourcePanels
                 }
             )
                 |> withNoCmd
 
         DeleteSourcePanel ->
-            { model | sourcePanels = List.filter (\p -> p.name /= model.editingPanel) model.sourcePanels }
+            { model | sourcePanels = LE.removeAt model.editingPanelIdx model.sourcePanels }
                 |> withNoCmd
 
-        SelectEditingPanel name ->
+        SelectEditingPanel idx ->
             { model
-                | editingPanel = name
+                | editingPanelIdx = idx
             }
                 |> withNoCmd
 
         InputEditingPanelName name ->
-            case getSourcePanel model.editingPanel model.sourcePanels of
+            case getSourcePanel model.editingPanelIdx model.sourcePanels of
                 Nothing ->
                     model |> withNoCmd
 
                 Just sources ->
                     { model
                         | sourcePanels =
-                            LE.updateIf (\p -> p.name == model.editingPanel) (\p -> { p | name = name }) model.sourcePanels
-                        , editingPanel = name
+                            LE.updateAt model.editingPanelIdx (\p -> { p | name = name }) model.sourcePanels
                     }
                         |> withNoCmd
 
@@ -839,9 +838,9 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     res
 
 
-getSourcePanel : String -> List SourcePanel -> Maybe (List Source)
-getSourcePanel name panels =
-    case LE.find (\p -> p.name == name) panels of
+getSourcePanel : Int -> List SourcePanel -> Maybe (List Source)
+getSourcePanel idx panels =
+    case LE.getAt idx panels of
         Nothing ->
             Nothing
 
@@ -854,9 +853,9 @@ newSourcePanelName panels =
     let
         loop : Int -> String -> String
         loop index name =
-            case getSourcePanel name panels of
+            case LE.find (\p -> p.name == name) panels of
                 Just _ ->
-                    loop (index + 1) ("new" ++ String.fromInt index)
+                    loop (index + 1) ("new" ++ String.fromInt (index + 1))
 
                 Nothing ->
                     name
@@ -1595,50 +1594,46 @@ viewSourcePanels model =
             [ p [] [ button AddSourcePanel "Add" ]
             , p []
                 [ table [ class "prettyTable" ] <|
-                    List.foldr
-                        (\{ name } res ->
-                            viewSourcePanel model name
-                                :: res
+                    List.indexedMap
+                        (\idx panel ->
+                            viewSourcePanel model idx panel
                         )
-                        []
                         model.sourcePanels
                 ]
             ]
         ]
 
 
-viewSourcePanel : Model -> String -> Html Msg
-viewSourcePanel model name =
+viewSourcePanel : Model -> Int -> SourcePanel -> Html Msg
+viewSourcePanel model idx panel =
     let
-        ( names, panels ) =
-            case getSourcePanel model.editingPanel model.sourcePanels of
-                Just sources ->
-                    ( List.take 2 sources |> List.map .src |> List.intersperse ", ", sources )
+        sources =
+            panel.panels
 
-                Nothing ->
-                    ( [], [] )
+        names =
+            List.take 2 sources |> List.map .src |> List.intersperse ", "
 
         canSave =
-            panels /= model.editingSources
+            sources /= model.editingSources
 
         isEditing =
-            name == model.editingPanel
+            idx == model.editingPanelIdx
     in
-    tr [ onClick <| SelectEditingPanel name ]
+    tr [ onClick <| SelectEditingPanel idx ]
         [ th []
             [ if not isEditing then
-                text name
+                text panel.name
 
               else
                 span []
                     [ input
                         [ onInput InputEditingPanelName
                         , width 10
-                        , value name
+                        , value panel.name
                         , style "min-height" "1em"
                         , style "min-width" "10em"
                         ]
-                        [ text name ]
+                        [ text panel.name ]
                     , text " "
                     , enabledButton canSave (SaveRestoreSourcePanel True) "Save"
                     , text " "
@@ -1652,7 +1647,7 @@ viewSourcePanel model name =
         , td [] <|
             List.concat
                 [ List.map text names
-                , [ if List.length names < List.length panels then
+                , [ if List.length names < List.length sources then
                         text ", ..."
 
                     else
