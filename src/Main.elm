@@ -58,6 +58,12 @@ sourceUrl s =
             ""
 
 
+type alias SourcePanel =
+    { name : String
+    , panels : List Source
+    }
+
+
 type alias Model =
     { err : Maybe String
     , sources : List Source
@@ -65,7 +71,7 @@ type alias Model =
     , src : String
     , editingSources : List Source
     , editingSrc : String
-    , sourcePanels : Dict String (List Source)
+    , sourcePanels : List SourcePanel
     , editingPanel : String
     , justAddedEditingRow : Bool
     , time : Int
@@ -89,7 +95,7 @@ type alias SavedModel =
     , src : String
     , editingSources : List Source
     , editingSrc : String
-    , sourcePanels : Dict String (List Source)
+    , sourcePanels : List SourcePanel
     , editingPanel : String
     , switchPeriod : String
     , switchEnabled : Bool
@@ -153,13 +159,28 @@ savedModelDecoder =
         |> required "src" JD.string
         |> optional "editingSources" sourcesDecoder []
         |> optional "editingSrc" JD.string ""
-        |> optional "sourcePanels" (JD.dict (JD.list sourceDecoder)) Dict.empty
+        |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
         |> optional "editingPanel" JD.string ""
         |> optional "switchPeriod" JD.string "5"
         |> required "switchEnabled" JD.bool
         |> optional "showControls" JD.bool False
         |> optional "showEditingSources" JD.bool True
         |> optional "mergeEditingSources" JD.bool True
+
+
+sourcePanelDecoder : Decoder SourcePanel
+sourcePanelDecoder =
+    JD.succeed SourcePanel
+        |> required "name" JD.string
+        |> required "panels" (JD.list sourceDecoder)
+
+
+encodeSourcePanel : SourcePanel -> Value
+encodeSourcePanel panel =
+    JE.object
+        [ ( "name", JE.string panel.name )
+        , ( "panels", JE.list encodeSource panel.panels )
+        ]
 
 
 sourcesDecoder : Decoder (List Source)
@@ -218,7 +239,7 @@ encodeSavedModel savedModel =
         , ( "src", JE.string savedModel.src )
         , ( "editingSources", JE.list encodeSource savedModel.editingSources )
         , ( "editingSrc", JE.string savedModel.editingSrc )
-        , ( "sourcePanels", JE.dict identity (JE.list encodeSource) savedModel.sourcePanels )
+        , ( "sourcePanels", JE.list encodeSourcePanel savedModel.sourcePanels )
         , ( "editingPanel", JE.string savedModel.editingPanel )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
@@ -251,7 +272,7 @@ init =
       , src = stonedEyeballsUrl
       , editingSources = []
       , editingSrc = ""
-      , sourcePanels = Dict.fromList []
+      , sourcePanels = []
       , editingPanel = ""
       , justAddedEditingRow = False
       , time = 0
@@ -708,7 +729,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             in
             { model
                 | sourcePanels =
-                    Dict.insert name model.editingSources model.sourcePanels
+                    { name = name, panels = model.editingSources } :: model.sourcePanels
                 , editingPanel =
                     name
             }
@@ -716,7 +737,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         SaveRestoreSourcePanel savep ->
             (if savep then
-                case Dict.get model.editingPanel model.sourcePanels of
+                case getSourcePanel model.editingPanel model.sourcePanels of
                     Just sources ->
                         { model | editingSources = sources }
 
@@ -724,12 +745,15 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                         model
 
              else
-                { model | sourcePanels = Dict.insert model.editingPanel model.editingSources model.sourcePanels }
+                { model
+                    | sourcePanels =
+                        LE.updateIf (\p -> p.name == model.editingPanel) (\p -> { p | panels = model.editingSources }) model.sourcePanels
+                }
             )
                 |> withNoCmd
 
         DeleteSourcePanel ->
-            { model | sourcePanels = Dict.remove model.editingPanel model.sourcePanels }
+            { model | sourcePanels = List.filter (\p -> p.name /= model.editingPanel) model.sourcePanels }
                 |> withNoCmd
 
         SelectEditingPanel name ->
@@ -739,14 +763,14 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 |> withNoCmd
 
         InputEditingPanelName name ->
-            case Dict.get model.editingPanel model.sourcePanels of
+            case getSourcePanel model.editingPanel model.sourcePanels of
                 Nothing ->
                     model |> withNoCmd
 
                 Just sources ->
                     { model
                         | sourcePanels =
-                            Dict.insert name sources <| Dict.remove model.editingPanel model.sourcePanels
+                            LE.updateIf (\p -> p.name == model.editingPanel) (\p -> { p | name = name }) model.sourcePanels
                         , editingPanel = name
                     }
                         |> withNoCmd
@@ -815,16 +839,27 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     res
 
 
-newSourcePanelName : Dict String (List Source) -> String
-newSourcePanelName panelDict =
+getSourcePanel : String -> List SourcePanel -> Maybe (List Source)
+getSourcePanel name panels =
+    case LE.find (\p -> p.name == name) panels of
+        Nothing ->
+            Nothing
+
+        Just panel ->
+            Just panel.panels
+
+
+newSourcePanelName : List SourcePanel -> String
+newSourcePanelName panels =
     let
         loop : Int -> String -> String
         loop index name =
-            if Dict.member name panelDict then
-                loop (index + 1) ("new" ++ String.fromInt index)
+            case getSourcePanel name panels of
+                Just _ ->
+                    loop (index + 1) ("new" ++ String.fromInt index)
 
-            else
-                name
+                Nothing ->
+                    name
     in
     loop 1 "new"
 
@@ -1560,8 +1595,8 @@ viewSourcePanels model =
             [ p [] [ button AddSourcePanel "Add" ]
             , p []
                 [ table [ class "prettyTable" ] <|
-                    Dict.foldr
-                        (\name _ res ->
+                    List.foldr
+                        (\{ name } res ->
                             viewSourcePanel model name
                                 :: res
                         )
@@ -1576,7 +1611,7 @@ viewSourcePanel : Model -> String -> Html Msg
 viewSourcePanel model name =
     let
         ( names, panels ) =
-            case Dict.get name model.sourcePanels of
+            case getSourcePanel model.editingPanel model.sourcePanels of
                 Just sources ->
                     ( List.take 2 sources |> List.map .src |> List.intersperse ", ", sources )
 
