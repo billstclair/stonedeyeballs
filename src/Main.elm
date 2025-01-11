@@ -66,6 +66,7 @@ type alias Model =
     , editingSources : List Source
     , editingSrc : String
     , sourcePanels : Dict String (List Source)
+    , editingPanel : String
     , justAddedEditingRow : Bool
     , time : Int
     , lastSwapTime : Int
@@ -89,6 +90,7 @@ type alias SavedModel =
     , editingSources : List Source
     , editingSrc : String
     , sourcePanels : Dict String (List Source)
+    , editingPanel : String
     , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
@@ -115,6 +117,7 @@ modelToSavedModel model =
     , editingSources = model.editingSources
     , editingSrc = model.editingSrc
     , sourcePanels = model.sourcePanels
+    , editingPanel = model.editingPanel
     , switchPeriod = model.switchPeriod
     , switchEnabled = model.switchEnabled
     , showControls = model.showControls
@@ -132,6 +135,7 @@ savedModelToModel savedModel model =
         , editingSources = savedModel.editingSources
         , editingSrc = savedModel.editingSrc
         , sourcePanels = savedModel.sourcePanels
+        , editingPanel = savedModel.editingPanel
         , switchPeriod = savedModel.switchPeriod
         , switchEnabled = savedModel.switchEnabled
         , showControls = savedModel.showControls
@@ -150,6 +154,7 @@ savedModelDecoder =
         |> optional "editingSources" sourcesDecoder []
         |> optional "editingSrc" JD.string ""
         |> optional "sourcePanels" (JD.dict (JD.list sourceDecoder)) Dict.empty
+        |> optional "editingPanel" JD.string ""
         |> optional "switchPeriod" JD.string "5"
         |> required "switchEnabled" JD.bool
         |> optional "showControls" JD.bool False
@@ -214,6 +219,7 @@ encodeSavedModel savedModel =
         , ( "editingSources", JE.list encodeSource savedModel.editingSources )
         , ( "editingSrc", JE.string savedModel.editingSrc )
         , ( "sourcePanels", JE.dict identity (JE.list encodeSource) savedModel.sourcePanels )
+        , ( "editingPanel", JE.string savedModel.editingPanel )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
@@ -246,6 +252,7 @@ init =
       , editingSources = []
       , editingSrc = ""
       , sourcePanels = Dict.fromList []
+      , editingPanel = ""
       , justAddedEditingRow = False
       , time = 0
       , lastSwapTime = 0
@@ -692,7 +699,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             in
             { model
                 | sourcePanels =
-                    Dict.insert name [] model.sourcePanels
+                    Dict.insert name model.editingSources model.sourcePanels
             }
                 |> withNoCmd
 
@@ -1507,32 +1514,32 @@ viewSourcePanels model =
 viewSourcePanel : Model -> String -> Html Msg
 viewSourcePanel model name =
     let
-        names =
+        ( names, panelLength ) =
             case Dict.get name model.sourcePanels of
                 Just sources ->
-                    List.take 2 sources |> List.map .src |> List.intersperse ","
+                    ( List.take 2 sources |> List.map .src |> List.intersperse ", ", List.length sources )
 
                 Nothing ->
-                    []
-
-        viewName n =
-            span [] <|
-                List.concat
-                    [ [ text ", "
-                      , text n
-                      , if names == [] then
-                            text ""
-
-                        else
-                            text ":"
-                      ]
-                    , List.map text names
-                    ]
+                    ( [], 0 )
     in
-    span []
-        [ text " "
-        , text name
-        ]
+    span [] <|
+        List.concat
+            [ [ text " "
+              , b name
+              , if names == [] then
+                    text ""
+
+                else
+                    text ": "
+              ]
+            , List.map text names
+            , [ if List.length names < panelLength then
+                    text ", ..."
+
+                else
+                    text ""
+              ]
+            ]
 
 
 viewEditingSourcesInternal : Model -> Html Msg
