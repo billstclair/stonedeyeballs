@@ -1486,12 +1486,7 @@ viewInternal model =
                     [ text "Bill St. Clair" ]
                 ]
             , br
-            , button ToggleControls <|
-                if model.showControls then
-                    "Hide Controls"
-
-                else
-                    "Show Controls"
+            , showControlsButton model
             , if model.showControls then
                 p []
                     [ hr [] []
@@ -1500,8 +1495,20 @@ viewInternal model =
 
               else
                 text ""
+            , p []
+                [ button ReloadFromServer "Reload code from server" ]
             ]
         ]
+
+
+showControlsButton : Model -> Html Msg
+showControlsButton model =
+    button ToggleControls <|
+        if model.showControls then
+            "Hide Controls"
+
+        else
+            "Show Controls"
 
 
 h1 : String -> Html Msg
@@ -1533,7 +1540,7 @@ viewControls model =
             , viewEditingSources model
             , viewSourcePanels model
             , p []
-                [ button ReloadFromServer "Reload code from server" ]
+                [ showControlsButton model ]
             , p []
                 [ if model.reallyDeleteState then
                     button DeleteState "Really Delete State"
