@@ -15,9 +15,9 @@ import Browser.Events as Events exposing (Visibility(..))
 import Browser.Navigation as Navigation exposing (Key)
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
-import Html exposing (Attribute, Html, a, div, embed, hr, img, input, p, span, table, td, text, textarea, th, tr)
-import Html.Attributes exposing (checked, class, disabled, height, href, property, src, style, target, title, type_, value, width)
-import Html.Events exposing (onClick, onInput)
+import Html exposing (Attribute, Html, a, div, embed, hr, img, input, option, p, select, span, table, td, text, textarea, th, tr)
+import Html.Attributes exposing (checked, class, disabled, height, href, property, selected, src, style, target, title, type_, value, width)
+import Html.Events exposing (on, onClick, onInput, targetValue)
 import Http
 import Json.Decode as JD exposing (Decoder)
 import Json.Decode.Pipeline as DP exposing (custom, hardcoded, optional, required)
@@ -85,6 +85,8 @@ type alias Model =
     , showEditingSources : Bool
     , mergeEditingSources : Bool
     , controlsJson : String
+    , copyFrom : String
+    , copyTo : String
     , started : Started
     , funnelState : State
     }
@@ -294,6 +296,8 @@ init =
       , showEditingSources = True
       , mergeEditingSources = True
       , controlsJson = "[]"
+      , copyFrom = copyOptions.editor
+      , copyTo = copyOptions.clipboard
       , started = NotStarted
       , funnelState = initialFunnelState
       }
@@ -390,6 +394,9 @@ type Msg
     | DeleteSourcePanel
     | SelectEditingPanel Int
     | InputEditingPanelName String
+    | Copy
+    | SetCopyFrom String
+    | SetCopyTo String
     | ReloadFromServer
     | DeleteState
     | Process Value
@@ -798,6 +805,15 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                             LE.updateAt model.editingPanelIdx (\p -> { p | name = name }) model.sourcePanels
                     }
                         |> withNoCmd
+
+        Copy ->
+            model |> withNoCmd
+
+        SetCopyFrom s ->
+            model |> withNoCmd
+
+        SetCopyTo s ->
+            model |> withNoCmd
 
         ReloadFromServer ->
             model
@@ -1513,6 +1529,7 @@ viewControls model =
                     model.mergeEditingSources
                     "Merge new app images with your list."
                 ]
+            , viewCopyButtons model
             , viewEditingSources model
             , viewSourcePanels model
             , p []
@@ -1546,6 +1563,71 @@ viewSaveDeleteButtons model =
             (SaveRestoreEditingSources False)
             "Restore"
         ]
+
+
+type alias CopyOptions =
+    { clipboard : String
+    , live : String
+    , editor : String
+    , panel : String
+    }
+
+
+type alias CopyOptionsGetter =
+    CopyOptions -> String
+
+
+copyOptions : CopyOptions
+copyOptions =
+    { clipboard = "Clipboard (JSON)"
+    , live = "Live"
+    , editor = "Editor"
+    , panel = "Selected Panel"
+    }
+
+
+viewCopyButtons : Model -> Html Msg
+viewCopyButtons model =
+    p []
+        [ b "Copy from: "
+        , select
+            [ on "change" <| JD.map SetCopyFrom targetValue ]
+            (List.map (viewOption True isFromSelected model)
+                [ .clipboard, .live, .editor, .panel ]
+            )
+        , text ", "
+        , b "to: "
+        , select [ on "change" <| JD.map SetCopyTo targetValue ]
+            (List.map (viewOption False isToSelected model)
+                [ .clipboard ]
+            )
+        , text " "
+        , button Copy "Copy"
+        ]
+
+
+isFromSelected : CopyOptionsGetter -> Model -> Bool
+isFromSelected option model =
+    model.copyFrom == option copyOptions
+
+
+isToSelected : CopyOptionsGetter -> Model -> Bool
+isToSelected option model =
+    model.copyTo == option copyOptions
+
+
+viewOption : Bool -> (CopyOptionsGetter -> Model -> Bool) -> Model -> CopyOptionsGetter -> Html Msg
+viewOption isEnabled isSelected model labelGetter =
+    let
+        label =
+            labelGetter copyOptions
+    in
+    option
+        [ value label
+        , selected <| isSelected labelGetter model
+        , disabled <| not isEnabled
+        ]
+        [ text label ]
 
 
 viewEditingSources : Model -> Html Msg
