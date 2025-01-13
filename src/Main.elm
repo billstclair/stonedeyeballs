@@ -85,8 +85,8 @@ type alias Model =
     , showEditingSources : Bool
     , mergeEditingSources : Bool
     , controlsJson : String
-    , copyFrom : String
-    , copyTo : String
+    , copyFrom : CopyOption
+    , copyTo : CopyOption
     , started : Started
     , funnelState : State
     }
@@ -296,8 +296,8 @@ init =
       , showEditingSources = True
       , mergeEditingSources = True
       , controlsJson = "[]"
-      , copyFrom = copyOptions.editor
-      , copyTo = copyOptions.clipboard
+      , copyFrom = Editor
+      , copyTo = Clipboard
       , started = NotStarted
       , funnelState = initialFunnelState
       }
@@ -809,10 +809,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
         Copy ->
             model |> withNoCmd
 
-        SetCopyFrom s ->
+        SetCopyFrom o ->
             model |> withNoCmd
 
-        SetCopyTo s ->
+        SetCopyTo o ->
             model |> withNoCmd
 
         ReloadFromServer ->
@@ -1572,25 +1572,41 @@ viewSaveDeleteButtons model =
         ]
 
 
-type alias CopyOptions =
-    { clipboard : String
-    , live : String
-    , editor : String
-    , panel : String
-    }
+
+-- encoders may depend on the strings in `copyOptions`,
+-- but I'd rather they not.
+-- I haven't yet written one, so it is not yet an issue.
+-- Ideally, no code will depend on the strings here, so you
+-- may change them at will and not break anything, though if you
+-- name them all "Bite me!", you may confuse the users.
 
 
-type alias CopyOptionsGetter =
-    CopyOptions -> String
+type CopyOption
+    = Clipboard
+    | Live
+    | Editor
+    | Panel
 
 
-copyOptions : CopyOptions
-copyOptions =
-    { clipboard = "Clipboard (JSON)"
-    , live = "Live"
-    , editor = "Editor"
-    , panel = "Selected Panel"
-    }
+copyOptionLabel : CopyOption -> String
+copyOptionLabel copyOption =
+    case copyOption of
+        Clipboard ->
+            "Clipboard (JSON)"
+
+        Live ->
+            "Live"
+
+        Editor ->
+            "Sources Editor"
+
+        Panel ->
+            "Selected Panel"
+
+
+copyPlaces : List CopyOption
+copyPlaces =
+    [ Clipboard, Live, Editor, Panel ]
 
 
 viewCopyButtons : Model -> Html Msg
@@ -1599,40 +1615,65 @@ viewCopyButtons model =
         [ b "Copy from: "
         , select
             [ on "change" <| JD.map SetCopyFrom targetValue ]
-            (List.map (viewOption True isFromSelected model)
-                [ .clipboard, .live, .editor, .panel ]
+            (List.map
+                (\option ->
+                    viewOption True isFromSelected isFromSelectable option model
+                )
+                copyPlaces
             )
         , text ", "
         , b "to: "
         , select [ on "change" <| JD.map SetCopyTo targetValue ]
-            (List.map (viewOption False isToSelected model)
-                [ .clipboard ]
+            (List.map (\option -> viewOption False isToSelected isToSelectable option model)
+                copyPlaces
             )
         , text " "
         , button Copy "Copy"
         ]
 
 
-isFromSelected : CopyOptionsGetter -> Model -> Bool
+isFromSelected : CopyOption -> Model -> Bool
 isFromSelected option model =
-    model.copyFrom == option copyOptions
+    model.copyFrom == option
 
 
-isToSelected : CopyOptionsGetter -> Model -> Bool
+isFromSelectable : CopyOption -> Model -> Bool
+isFromSelectable option model =
+    case model.copyFrom of
+        Clipboard ->
+            True
+
+        Live ->
+            True
+
+        Editor ->
+            True
+
+        Panel ->
+            True
+
+
+isToSelected : CopyOption -> Model -> Bool
 isToSelected option model =
-    model.copyTo == option copyOptions
+    model.copyTo == option
 
 
-viewOption : Bool -> (CopyOptionsGetter -> Model -> Bool) -> Model -> CopyOptionsGetter -> Html Msg
-viewOption isEnabled isSelected model labelGetter =
+isToSelectable : CopyOption -> Model -> Bool
+isToSelectable =
+    -- TODO
+    isFromSelectable
+
+
+viewOption : Bool -> (CopyOption -> Model -> Bool) -> (CopyOption -> Model -> Bool) -> CopyOption -> Model -> Html Msg
+viewOption isEnabled isSelected isSelectable copyOption model =
     let
         label =
-            labelGetter copyOptions
+            copyOptionLabel copyOption
     in
     option
         [ value label
-        , selected <| isSelected labelGetter model
-        , disabled <| not isEnabled
+        , selected <| isSelected copyOption model
+        , disabled <| not isEnabled || not (isSelectable copyOption model)
         ]
         [ text label ]
 
