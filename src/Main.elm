@@ -1695,7 +1695,8 @@ viewEditingSources model =
             span []
                 [ viewSaveDeleteButtons model
                 , viewEditingSourcesInternal model
-                , viewSaveDeleteButtons model
+
+                --, viewSaveDeleteButtons model
                 , let
                     controlsJson =
                         computeControlsJson model.editingSources
@@ -1818,74 +1819,65 @@ viewEditingSourcesInternal model =
     span []
         [ text "Text boxes are: display, label, url"
         , br
-        , table [ class "prettytable" ] <|
+        , table [] <|
             let
                 viewSource : Int -> Source -> Html Msg
                 viewSource idx source =
-                    tr
-                        [ onClick <|
-                            if not model.justAddedEditingRow && idx /= model.editingSrcIdx then
-                                SelectEditingSrc idx
-
-                            else
-                                Noop
-                        ]
-                        [ td []
-                            [ span []
+                    span []
+                        [ if idx == model.editingSrcIdx then
+                            span []
                                 [ text <| String.fromInt idx
                                 , text ": "
-                                , if idx == model.editingSrcIdx then
+                                , button AddEditingSrc "Add"
+                                , text " "
+                                , button DeleteEditingSrc "Delete"
+                                , text " "
+                                , if model.src /= source.src then
                                     span []
-                                        [ button AddEditingSrc "Add"
+                                        [ button DisplayEditingSrc "Display"
                                         , text " "
-                                        , button DeleteEditingSrc "Delete"
-                                        , text " "
-                                        , if model.src /= source.src then
-                                            span []
-                                                [ button DisplayEditingSrc "Display"
-                                                , text " "
-                                                ]
-
-                                          else
-                                            text ""
-                                        , input
-                                            [ onInput InputEditingSrc
-                                            , width 30
-                                            , value source.src
-                                            , style "min-height" "1em"
-                                            , style "min-width" "20em"
-                                            ]
-                                            [ text source.src ]
-                                        , text " "
-                                        , input
-                                            [ onInput InputEditingName
-                                            , width 20
-                                            , value <| sourceLabel source
-                                            ]
-                                            [ text source.src ]
-                                        , text " "
-                                        , input
-                                            [ onInput InputEditingUrl
-                                            , width 20
-                                            , value <| sourceUrl source
-                                            ]
-                                            [ text <| sourceUrl source ]
                                         ]
 
                                   else
-                                    span
-                                        [ style "min-height" "1em"
-                                        , style "min-width" "30em"
-                                        ]
-                                        [ text <|
-                                            if source.src == "" then
-                                                special.nbsp
-
-                                            else
-                                                source.src
-                                        ]
+                                    text ""
+                                , input
+                                    [ onInput InputEditingSrc
+                                    , width 30
+                                    , value source.src
+                                    , style "min-height" "1em"
+                                    , style "min-width" "20em"
+                                    ]
+                                    [ text source.src ]
+                                , text " "
+                                , input
+                                    [ onInput InputEditingName
+                                    , width 20
+                                    , value <| sourceLabel source
+                                    ]
+                                    [ text source.src ]
+                                , text " "
+                                , input
+                                    [ onInput InputEditingUrl
+                                    , width 20
+                                    , value <| sourceUrl source
+                                    ]
+                                    [ text <| sourceUrl source ]
                                 ]
-                            ]
+
+                          else
+                            text ""
+
+                        --                                    span
+                        --                                        [ style "min-height" "1em"
+                        --                                        , style "min-width" "30em"
+                        --                                        ]
+                        --                                        [ text <|
+                        --                                            if source.src == "" then
+                        --                                                special.nbsp
+                        --
+                        --                                            else
+                        --                                                source.src
+                        --                                        ]
                         ]
             in
             List.indexedMap viewSource sources
