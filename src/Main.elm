@@ -69,7 +69,7 @@ type alias Model =
     { err : Maybe String
     , sources : List Source
     , lastSources : List Source
-    , src : String
+    , srcIdx : Int
     , sourcePanels : List SourcePanel
     , editingPanelIdx : Int
     , justAddedEditingRow : Bool
@@ -92,7 +92,7 @@ type alias Model =
 type alias SavedModel =
     { sources : List Source
     , lastSources : List Source
-    , src : String
+    , srcIdx : Int
     , sourcePanels : List SourcePanel
     , editingPanelIdx : Int
     , switchPeriod : String
@@ -117,7 +117,7 @@ modelToSavedModel : Model -> SavedModel
 modelToSavedModel model =
     { sources = model.sources
     , lastSources = model.lastSources
-    , src = model.src
+    , srcIdx = model.srcIdx
     , sourcePanels = model.sourcePanels
     , editingPanelIdx = model.editingPanelIdx
     , switchPeriod = model.switchPeriod
@@ -133,7 +133,7 @@ savedModelToModel savedModel model =
     { model
         | sources = savedModel.sources
         , lastSources = savedModel.lastSources
-        , src = savedModel.src
+        , srcIdx = savedModel.srcIdx
         , sourcePanels = savedModel.sourcePanels
         , editingPanelIdx = savedModel.editingPanelIdx
         , switchPeriod = savedModel.switchPeriod
@@ -157,7 +157,7 @@ savedModelDecoder =
     JD.succeed SavedModel
         |> required "sources" sourcesDecoder
         |> optional "lastSources" sourcesDecoder []
-        |> required "src" JD.string
+        |> required "srcIdx" JD.int
         |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
         |> optional "editingPanelIdx" (idxDecoder -1) -1
         |> optional "switchPeriod" JD.string "5"
@@ -235,7 +235,7 @@ encodeSavedModel savedModel =
     JE.object
         [ ( "sources", JE.list encodeSource savedModel.sources )
         , ( "lastSources", JE.list encodeSource savedModel.lastSources )
-        , ( "src", JE.string savedModel.src )
+        , ( "srcIdx", JE.int savedModel.srcIdx )
         , ( "sourcePanels", JE.list encodeSourcePanel savedModel.sourcePanels )
         , ( "editingPanelIdx", JE.int savedModel.editingPanelIdx )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
@@ -266,7 +266,7 @@ init =
     ( { err = Nothing
       , sources = [ stonedEyeballsSource ]
       , lastSources = [ stonedEyeballsSource ]
-      , src = stonedEyeballsUrl
+      , srcIdx = 0
       , sourcePanels = []
       , editingPanelIdx = -1
       , justAddedEditingRow = False
@@ -942,36 +942,25 @@ digitKey digit modelIn =
         model =
             { modelIn | lastSwapTime = modelIn.time }
     in
-    case LE.getAt index model.sources of
-        Just { src } ->
-            { model | src = src }
+    if index >= 0 && index < List.length model.sources then
+        { model | srcIdx = index }
 
-        Nothing ->
-            model
+    else
+        model
 
 
 nextImage : Model -> Model
 nextImage model =
-    viewImage model
-        (case LE.findIndex (\source -> source.src == model.src) model.sources of
-            Just idx ->
-                idx + 1
-
-            Nothing ->
-                List.length model.sources - 1
-        )
+    viewImage model <|
+        model.srcIdx
+            + 1
 
 
 prevImage : Model -> Model
 prevImage model =
-    viewImage model
-        (case LE.findIndex (\src -> src.src == model.src) model.sources of
-            Just idx ->
-                idx - 1
-
-            Nothing ->
-                0
-        )
+    viewImage model <|
+        model.srcIdx
+            - 1
 
 
 viewImage : Model -> Int -> Model
@@ -993,40 +982,7 @@ viewImage model index =
             else
                 index
     in
-    case LE.getAt idx sources of
-        Just { src } ->
-            { model | src = src }
-
-        _ ->
-            model
-
-
-nextElement : List String -> String -> String
-nextElement strings string =
-    case LE.elemIndex string strings of
-        Nothing ->
-            case LE.getAt 0 strings of
-                Just s ->
-                    s
-
-                Nothing ->
-                    stonedEyeballsUrl
-
-        Just index ->
-            let
-                idx =
-                    if index + 1 < List.length strings then
-                        index + 1
-
-                    else
-                        0
-            in
-            case LE.getAt idx strings of
-                Just s ->
-                    s
-
-                Nothing ->
-                    stonedEyeballsUrl
+    { model | srcIdx = index }
 
 
 getNameFromFileName : String -> String
@@ -1065,7 +1021,7 @@ view model =
 
 modelLabel : Model -> String
 modelLabel model =
-    case LE.find (\s -> s.src == model.src) model.sources of
+    case LE.getAt model.srcIdx model.sources of
         Just s ->
             case s.label of
                 Just l ->
@@ -1104,19 +1060,19 @@ viewInternal model =
             modelLabel model
 
         index =
-            case LE.findIndex (\src -> src.src == model.src) model.sources of
-                Just i ->
-                    i
-
-                Nothing ->
-                    -1
+            model.srcIdx
 
         modelSrc =
-            if String.startsWith "http" model.src then
-                model.src
+            case LE.getAt index model.sources of
+                Just s ->
+                    if String.startsWith "http" s.src then
+                        s.src
 
-            else
-                "images/" ++ model.src
+                    else
+                        "images/" ++ s.src
+
+                Nothing ->
+                    String.fromInt model.srcIdx
 
         url =
             case LE.getAt index model.sources of
