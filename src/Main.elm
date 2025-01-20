@@ -70,8 +70,6 @@ type alias Model =
     , sources : List Source
     , lastSources : List Source
     , src : String
-    , editingSources : List Source
-    , editingSrcIdx : Int
     , sourcePanels : List SourcePanel
     , editingPanelIdx : Int
     , justAddedEditingRow : Bool
@@ -84,7 +82,6 @@ type alias Model =
     , showControls : Bool
     , showEditingSources : Bool
     , mergeEditingSources : Bool
-    , controlsJson : String
     , copyFrom : CopyOption
     , copyTo : CopyOption
     , started : Started
@@ -96,8 +93,6 @@ type alias SavedModel =
     { sources : List Source
     , lastSources : List Source
     , src : String
-    , editingSources : List Source
-    , editingSrcIdx : Int
     , sourcePanels : List SourcePanel
     , editingPanelIdx : Int
     , switchPeriod : String
@@ -123,8 +118,6 @@ modelToSavedModel model =
     { sources = model.sources
     , lastSources = model.lastSources
     , src = model.src
-    , editingSources = model.editingSources
-    , editingSrcIdx = model.editingSrcIdx
     , sourcePanels = model.sourcePanels
     , editingPanelIdx = model.editingPanelIdx
     , switchPeriod = model.switchPeriod
@@ -141,8 +134,6 @@ savedModelToModel savedModel model =
         | sources = savedModel.sources
         , lastSources = savedModel.lastSources
         , src = savedModel.src
-        , editingSources = savedModel.editingSources
-        , editingSrcIdx = savedModel.editingSrcIdx
         , sourcePanels = savedModel.sourcePanels
         , editingPanelIdx = savedModel.editingPanelIdx
         , switchPeriod = savedModel.switchPeriod
@@ -151,7 +142,6 @@ savedModelToModel savedModel model =
         , showEditingSources = savedModel.showEditingSources
         , mergeEditingSources = savedModel.mergeEditingSources
     }
-        |> updateControlsJson
 
 
 idxDecoder : Int -> Decoder Int
@@ -168,8 +158,6 @@ savedModelDecoder =
         |> required "sources" sourcesDecoder
         |> optional "lastSources" sourcesDecoder []
         |> required "src" JD.string
-        |> optional "editingSources" sourcesDecoder []
-        |> optional "editingSrcIdx" (idxDecoder -1) -1
         |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
         |> optional "editingPanelIdx" (idxDecoder -1) -1
         |> optional "switchPeriod" JD.string "5"
@@ -248,8 +236,6 @@ encodeSavedModel savedModel =
         [ ( "sources", JE.list encodeSource savedModel.sources )
         , ( "lastSources", JE.list encodeSource savedModel.lastSources )
         , ( "src", JE.string savedModel.src )
-        , ( "editingSources", JE.list encodeSource savedModel.editingSources )
-        , ( "editingSrcIdx", JE.int savedModel.editingSrcIdx )
         , ( "sourcePanels", JE.list encodeSourcePanel savedModel.sourcePanels )
         , ( "editingPanelIdx", JE.int savedModel.editingPanelIdx )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
@@ -281,8 +267,6 @@ init =
       , sources = [ stonedEyeballsSource ]
       , lastSources = [ stonedEyeballsSource ]
       , src = stonedEyeballsUrl
-      , editingSources = []
-      , editingSrcIdx = -1
       , sourcePanels = []
       , editingPanelIdx = -1
       , justAddedEditingRow = False
@@ -295,7 +279,6 @@ init =
       , showControls = False
       , showEditingSources = True
       , mergeEditingSources = True
-      , controlsJson = "[]"
       , copyFrom = Editor
       , copyTo = Clipboard
       , started = NotStarted
@@ -308,11 +291,6 @@ init =
 computeControlsJson : List Source -> String
 computeControlsJson sources =
     JE.encode 2 <| JE.list encodeSource sources
-
-
-updateControlsJson : Model -> Model
-updateControlsJson model =
-    { model | controlsJson = computeControlsJson model.editingSources }
 
 
 
@@ -378,17 +356,11 @@ type Msg
     | ToggleControls
     | ToggleShowEditingSources
     | ToggleMergeEditingSources
-    | SelectEditingSrc Int
     | AddEditingSrc
     | DeleteEditingSrc
-    | DisplayEditingSrc
     | InputEditingSrc String
     | InputEditingName String
     | InputEditingUrl String
-    | SaveRestoreEditingSources Bool
-    | SaveRestoreControlsJson Bool
-    | DeleteAllEditingSources
-    | InputControlsJson String
     | AddSourcePanel
     | SaveRestoreSourcePanel Bool
     | DeleteSourcePanel
@@ -472,20 +444,12 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             else
                 { modelIn | reallyDeleteState = False }
 
-        modelIn2 =
+        model =
             if not preserveJustAddedEditingRow then
                 { modelIn1 | justAddedEditingRow = False }
 
             else
                 modelIn1
-
-        model =
-            if modelIn2.editingSources == [] then
-                { modelIn2 | editingSources = modelIn2.sources }
-                    |> updateControlsJson
-
-            else
-                modelIn2
     in
     case msg of
         MouseDown ->
@@ -568,18 +532,6 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model
                 | showControls =
                     not model.showControls
-                , editingSrcIdx =
-                    Debug.log "ToggleControls, editingSrc" <|
-                        if model.showControls then
-                            model.editingSrcIdx
-
-                        else
-                            case LE.findIndex (\s -> s.src == model.src) model.sources of
-                                Just idx ->
-                                    idx
-
-                                Nothing ->
-                                    -1
             }
                 |> withNoCmd
 
@@ -591,168 +543,25 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model | mergeEditingSources = not model.mergeEditingSources }
                 |> withNoCmd
 
-        SelectEditingSrc idx ->
-            { model
-                | editingSrcIdx = Debug.log "SelectEditingSrc" idx
-                , src =
-                    case LE.getAt idx model.sources of
-                        Just source ->
-                            source.src
-
-                        Nothing ->
-                            ""
-            }
-                |> withNoCmd
-
         AddEditingSrc ->
-            let
-                ( head, tail ) =
-                    headTail model.editingSrcIdx model.editingSources
-
-                idx =
-                    List.length head
-            in
-            { model
-                | editingSources = head ++ [ srcSource "" ] ++ tail
-                , editingSrcIdx = idx
-                , justAddedEditingRow = True
-            }
-                |> updateControlsJson
-                |> withCmd
-                    (delay 1 <| SelectEditingSrc idx)
+            -- TODO
+            model |> withNoCmd
 
         DeleteEditingSrc ->
-            { model
-                | editingSources =
-                    LE.removeAt model.editingSrcIdx model.editingSources
-                , editingSrcIdx = -1
-            }
-                |> updateControlsJson
-                |> withNoCmd
-
-        DisplayEditingSrc ->
-            case LE.getAt model.editingSrcIdx model.sources of
-                Just source ->
-                    { model | src = source.src } |> withNoCmd
-
-                Nothing ->
-                    model |> withNoCmd
+            -- TODO
+            model |> withNoCmd
 
         InputEditingSrc editingSrc ->
-            let
-                _ =
-                    Debug.log "InputEditingSrc" editingSrc
-            in
-            case LE.getAt model.editingSrcIdx model.editingSources of
-                Nothing ->
-                    model
-                        |> withNoCmd
-
-                Just source ->
-                    let
-                        editingSources =
-                            LE.setAt model.editingSrcIdx
-                                { source | src = editingSrc }
-                                model.editingSources
-                    in
-                    { model
-                        | editingSources = editingSources
-                        , src = source.src
-                    }
-                        |> updateControlsJson
-                        |> withNoCmd
+            -- TODO
+            model |> withNoCmd
 
         InputEditingName name ->
-            (case LE.getAt model.editingSrcIdx model.editingSources of
-                Nothing ->
-                    model
-
-                Just s ->
-                    { model
-                        | editingSources =
-                            LE.setAt model.editingSrcIdx
-                                { s
-                                    | label =
-                                        if name == "" then
-                                            Nothing
-
-                                        else
-                                            Just name
-                                }
-                                model.editingSources
-                    }
-                        |> updateControlsJson
-            )
-                |> withNoCmd
+            -- TODO
+            model |> withNoCmd
 
         InputEditingUrl url ->
-            (case LE.getAt model.editingSrcIdx model.editingSources of
-                Nothing ->
-                    model
-
-                Just s ->
-                    { model
-                        | editingSources =
-                            LE.setAt model.editingSrcIdx
-                                { s
-                                    | url =
-                                        if url == "" then
-                                            Nothing
-
-                                        else
-                                            Just url
-                                }
-                                model.editingSources
-                    }
-                        |> updateControlsJson
-            )
-                |> withNoCmd
-
-        SaveRestoreControlsJson savep ->
-            if savep then
-                case JD.decodeString sourcesDecoder model.controlsJson of
-                    Ok sources ->
-                        { model | editingSources = sources }
-                            |> withNoCmd
-
-                    Err e ->
-                        { model | err = Just <| JD.errorToString e }
-                            |> withNoCmd
-
-            else
-                { model | controlsJson = computeControlsJson model.editingSources }
-                    |> withNoCmd
-
-        SaveRestoreEditingSources savep ->
-            if savep then
-                { model
-                    | sources = model.editingSources
-                    , src =
-                        case LE.getAt model.editingSrcIdx model.editingSources of
-                            Just source ->
-                                source.src
-
-                            Nothing ->
-                                ""
-                }
-                    |> withNoCmd
-
-            else
-                { model
-                    | editingSources = model.sources
-                    , editingSrcIdx = LE.findIndex (\s -> s.src == model.src) model.sources |> Maybe.withDefault -1
-                }
-                    |> updateControlsJson
-                    |> withNoCmd
-
-        DeleteAllEditingSources ->
-            { model | editingSources = [ srcSource "" ] }
-                |> updateControlsJson
-                |> withNoCmd
-
-        InputControlsJson string ->
-            { model | controlsJson = string }
-                |> withNoCmd
+            -- TODO
+            model |> withNoCmd
 
         AddSourcePanel ->
             let
@@ -761,38 +570,23 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             in
             { model
                 | sourcePanels =
-                    { name = name, panels = model.editingSources } :: model.sourcePanels
+                    { name = name, panels = model.sources } :: model.sourcePanels
                 , editingPanelIdx =
                     0
             }
                 |> withNoCmd
 
         SaveRestoreSourcePanel savep ->
-            (if savep then
-                case getSourcePanel model.editingPanelIdx model.sourcePanels of
-                    Just sources ->
-                        { model | editingSources = sources }
-
-                    Nothing ->
-                        model
-
-             else
-                { model
-                    | sourcePanels =
-                        LE.updateAt model.editingPanelIdx (\p -> { p | panels = model.editingSources }) model.sourcePanels
-                }
-            )
-                |> withNoCmd
+            -- TODO
+            model |> withNoCmd
 
         DeleteSourcePanel ->
             { model | sourcePanels = LE.removeAt model.editingPanelIdx model.sourcePanels }
                 |> withNoCmd
 
         SelectEditingPanel idx ->
-            { model
-                | editingPanelIdx = idx
-            }
-                |> withNoCmd
+            -- TODO
+            model |> withNoCmd
 
         InputEditingPanelName name ->
             case getSourcePanel model.editingPanelIdx model.sourcePanels of
@@ -820,6 +614,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 |> withCmd Navigation.reloadAndSkipCache
 
         DeleteState ->
+            -- TODO
             if model.reallyDeleteState then
                 let
                     ( mdl, cmd ) =
@@ -828,10 +623,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 { mdl
                     | reallyDeleteState = False
                     , started = Started
-                    , editingSources = []
-                    , editingSrcIdx = -1
                 }
-                    |> updateControlsJson
                     |> withCmds [ cmd, clearKeys "", getIndexJson True ]
 
             else
@@ -862,7 +654,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                                 model
                                     |> maybeAddNewSources sources
                     in
-                    mdl |> updateControlsJson |> withNoCmd
+                    mdl |> withNoCmd
 
         Process value ->
             case
@@ -922,20 +714,11 @@ maybeAddNewSources sources model =
 
             newSources =
                 AS.toList newSourcesSet
-
-            editingSources =
-                case model.editingSources of
-                    [] ->
-                        model.sources
-
-                    s ->
-                        s
         in
         { model
-            | editingSources = editingSources ++ newSources
+            | sources = sources ++ newSources
             , lastSources = model.lastSources ++ newSources
         }
-            |> updateControlsJson
 
 
 delay : Int -> msg -> Cmd msg
@@ -1554,20 +1337,25 @@ viewControls model =
 
 viewSaveDeleteButtons : Model -> Html Msg
 viewSaveDeleteButtons model =
+    -- TODO
     let
         different =
-            model.sources /= model.editingSources
+            True
     in
     p []
         [ enabledButton different
-            (SaveRestoreEditingSources True)
+            -- TODO
+            Noop
             "Save"
         , text " "
-        , button DeleteAllEditingSources
+
+        -- TODO
+        , button Noop
             "Delete all"
         , text " "
         , enabledButton different
-            (SaveRestoreEditingSources False)
+            -- TODO
+            Noop
             "Restore"
         ]
 
@@ -1695,40 +1483,6 @@ viewEditingSources model =
             span []
                 [ viewSaveDeleteButtons model
                 , viewEditingSourcesInternal model
-
-                --, viewSaveDeleteButtons model
-                , let
-                    controlsJson =
-                        computeControlsJson model.editingSources
-
-                    sourcesResult =
-                        JD.decodeString sourcesDecoder model.controlsJson
-
-                    saveOk =
-                        case sourcesResult of
-                            Ok _ ->
-                                True
-
-                            Err _ ->
-                                False
-                  in
-                  p []
-                    [ enabledButton (saveOk && (sourcesResult /= Ok model.editingSources))
-                        (SaveRestoreControlsJson True)
-                        "Save"
-                    , text " "
-                    , enabledButton (controlsJson /= model.controlsJson)
-                        (SaveRestoreControlsJson False)
-                        "Restore"
-                    , br
-                    , textarea
-                        [ style "min-height" "20em"
-                        , style "width" "95%"
-                        , onInput InputControlsJson
-                        , value model.controlsJson
-                        ]
-                        [ text model.controlsJson ]
-                    ]
                 ]
         ]
 
@@ -1761,10 +1515,12 @@ viewSourcePanel model idx panel =
             List.take 2 sources |> List.map .src |> List.intersperse ", "
 
         canSave =
-            sources /= model.editingSources
+            -- TODO
+            False
 
         isEditing =
-            idx == model.editingPanelIdx
+            -- TODO
+            False
     in
     tr [ onClick <| SelectEditingPanel idx ]
         [ th []
@@ -1809,12 +1565,7 @@ viewEditingSourcesInternal model =
     let
         sources : List Source
         sources =
-            case model.editingSources of
-                [] ->
-                    model.sources
-
-                ss ->
-                    ss
+            model.sources
     in
     span []
         [ text "Text boxes are: display, label, url"
@@ -1824,7 +1575,8 @@ viewEditingSourcesInternal model =
                 viewSource : Int -> Source -> Html Msg
                 viewSource idx source =
                     span []
-                        [ if idx == model.editingSrcIdx then
+                        -- TODO
+                        [ if idx == 0 then
                             span []
                                 [ text <| String.fromInt idx
                                 , text ": "
@@ -1832,14 +1584,6 @@ viewEditingSourcesInternal model =
                                 , text " "
                                 , button DeleteEditingSrc "Delete"
                                 , text " "
-                                , if model.src /= source.src then
-                                    span []
-                                        [ button DisplayEditingSrc "Display"
-                                        , text " "
-                                        ]
-
-                                  else
-                                    text ""
                                 , input
                                     [ onInput InputEditingSrc
                                     , width 30
