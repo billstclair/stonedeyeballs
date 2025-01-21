@@ -363,7 +363,8 @@ type Msg
     | MouseDown
     | ReceiveTime Posix
     | SetVisible Visibility
-    | OnKeyPress Bool Bool String
+    | SetSrcIdx String
+    | OnKeyPress Bool String
     | InputSwitchPeriod String
     | ToggleSwitchEnabled
     | ToggleControls
@@ -505,7 +506,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
         SetVisible v ->
             ( { model | visibility = Debug.log "visibility" v }, Cmd.none )
 
-        OnKeyPress isDown doDigits key ->
+        SetSrcIdx idxStr ->
+            digitKey idxStr model |> withNoCmd
+
+        OnKeyPress isDown key ->
             let
                 ( leftKeys, rightKeys ) =
                     if model.showControls then
@@ -527,7 +531,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             else if List.member key rightKeys then
                 nextImage model |> withNoCmd
 
-            else if doDigits && key >= "0" && key <= "9" then
+            else if not model.showControls && key >= "0" && key <= "9" then
                 digitKey key model |> withNoCmd
 
             else
@@ -987,10 +991,10 @@ digitKey digit modelIn =
 
         model =
             { modelIn | lastSwapTime = modelIn.time }
+                |> maybeSwitchEditor index
     in
     if index >= 0 && index < List.length model.sources then
-        -- TODO
-        model
+        { model | srcIdx = index }
 
     else
         model
@@ -1008,6 +1012,35 @@ prevImage model =
     viewImage model <|
         model.srcIdx
             - 1
+
+
+isEditingCurrent : Model -> Bool
+isEditingCurrent model =
+    case String.toInt model.editingIdxStr of
+        Nothing ->
+            False
+
+        Just editingIdx ->
+            if editingIdx /= model.editingIdx then
+                False
+
+            else
+                case LE.getAt model.editingIdx model.sources of
+                    Nothing ->
+                        False
+
+                    Just source ->
+                        let
+                            label =
+                                if model.editingLabel == "" then
+                                    Just <| getLabelFromFileName model.editingSrc
+
+                                else
+                                    Nothing
+                        in
+                        (source.src == model.editingSrc)
+                            && (source.label == label)
+                            && (source.url == nothingIfBlank model.editingUrl)
 
 
 viewImage : Model -> Int -> Model
@@ -1028,8 +1061,39 @@ viewImage model index =
 
             else
                 index
+
+        mdl =
+            maybeSwitchEditor idx model
     in
-    { model | srcIdx = index }
+    { mdl
+        | srcIdx = idx
+        , lastSwapTime = model.time
+    }
+
+
+maybeSwitchEditor : Int -> Model -> Model
+maybeSwitchEditor idx model =
+    if not <| isEditingCurrent model then
+        model
+
+    else
+        case LE.getAt idx model.sources of
+            Nothing ->
+                model
+
+            Just source ->
+                { model
+                    | editingIdx = idx
+                    , editingIdxStr = String.fromInt idx
+                    , editingSrc = source.src
+                    , editingLabel =
+                        case source.label of
+                            Just label ->
+                                label
+
+                            Nothing ->
+                                getLabelFromFileName source.src
+                }
 
 
 getLabelFromFileName : String -> String
@@ -1278,7 +1342,7 @@ viewSourceLinks index sources =
                     span []
                         [ a
                             [ href "#"
-                            , onClick <| OnKeyPress True True idxstr
+                            , onClick <| SetSrcIdx idxstr
                             , style "text-decoration" "none"
                             , title idxName
                             ]
@@ -1797,7 +1861,7 @@ subscriptions model =
 keyDecoder : Bool -> Decoder Msg
 keyDecoder keyDown =
     JD.field "key" JD.string
-        |> JD.map (OnKeyPress keyDown False)
+        |> JD.map (OnKeyPress keyDown)
 
 
 mouseDownDecoder : Decoder Msg
