@@ -83,7 +83,7 @@ type alias Model =
     , showEditingSources : Bool
     , mergeEditingSources : Bool
     , editingIdx : Int
-    , editingIdxstr : String
+    , editingIdxStr : String
     , editingSrc : String
     , editingName : String
     , editingUrl : String
@@ -285,8 +285,8 @@ init =
       , showEditingSources = True
       , mergeEditingSources = True
       , editingIdx = 0
-      , editingIdxstr = ""
-      , editingSrc = ""
+      , editingIdxStr = "0"
+      , editingSrc = stonedEyeballsUrl
       , editingName = ""
       , editingUrl = ""
       , copyFrom = Editor
@@ -564,19 +564,23 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         InputEditingIdxStr idxstr ->
             -- TODDO
-            model |> withNoCmd
+            { model | editingIdxStr = idxstr }
+                |> withNoCmd
 
         InputEditingSrc editingSrc ->
             -- TODO
-            model |> withNoCmd
+            { model | editingSrc = editingSrc }
+                |> withNoCmd
 
         InputEditingName name ->
             -- TODO
-            model |> withNoCmd
+            { model | editingName = name }
+                |> withNoCmd
 
         InputEditingUrl url ->
             -- TODO
-            model |> withNoCmd
+            { model | editingUrl = url }
+                |> withNoCmd
 
         AddSourcePanel ->
             let
@@ -1533,78 +1537,53 @@ viewSourcePanel model idx panel =
 
 viewEditingSourcesInternal : Model -> Html Msg
 viewEditingSourcesInternal model =
-    let
-        sources : List Source
-        sources =
-            model.sources
-    in
     span []
-        [ text "Text boxes are: display, label, url"
+        [ text "Text boxes are: index, display, label, url"
         , br
-        , table [] <|
-            let
-                viewSource : Int -> Source -> Html Msg
-                viewSource idx source =
-                    let
-                        idxstr =
-                            String.fromInt idx
-                    in
-                    span []
-                        -- TODO
-                        [ if idx == model.editingIdx then
-                            span []
-                                [ input
-                                    [ onInput InputEditingIdxStr
-                                    , width 2
-                                    , value idxstr
-                                    ]
-                                    [ text idxstr ]
-                                , text " : "
-                                , button AddEditingSrc "Add"
-                                , text " "
-                                , button DeleteEditingSrc "Delete"
-                                , text " "
-                                , input
-                                    [ onInput InputEditingSrc
-                                    , width 30
-                                    , value source.src
-                                    , style "min-height" "1em"
-                                    , style "min-width" "20em"
-                                    ]
-                                    [ text source.src ]
-                                , text " "
-                                , input
-                                    [ onInput InputEditingName
-                                    , width 20
-                                    , value <| sourceLabel source
-                                    ]
-                                    [ text source.src ]
-                                , text " "
-                                , input
-                                    [ onInput InputEditingUrl
-                                    , width 20
-                                    , value <| sourceUrl source
-                                    ]
-                                    [ text <| sourceUrl source ]
-                                ]
-
-                          else
-                            text ""
-
-                        --                                    span
-                        --                                        [ style "min-height" "1em"
-                        --                                        , style "min-width" "30em"
-                        --                                        ]
-                        --                                        [ text <|
-                        --                                            if source.src == "" then
-                        --                                                special.nbsp
-                        --
-                        --                                            else
-                        --                                                source.src
-                        --                                        ]
-                        ]
-            in
-            List.indexedMap viewSource sources
+        , text "Change index to move or lookup (press button)."
+        , br
+        , text "Change display, label, or url to immeditely update."
+        , br
+        , text "Change all and Add."
+        , br
+        , span []
+            -- TODO
+            [ input
+                [ onInput InputEditingIdxStr
+                , width 2
+                , value model.editingIdxStr
+                , style "max-width" "3em"
+                ]
+                [ text model.editingIdxStr ]
+            , text " : "
+            , input
+                [ onInput InputEditingSrc
+                , width 30
+                , value model.editingSrc
+                , style "min-height" "1em"
+                , style "min-width" "20em"
+                ]
+                [ text model.editingSrc ]
+            , text " "
+            , input
+                [ onInput InputEditingName
+                , width 20
+                , value model.editingName
+                ]
+                [ text model.editingName ]
+            , text " "
+            , input
+                [ onInput InputEditingUrl
+                , width 20
+                , value model.editingUrl
+                ]
+                [ text model.editingUrl ]
+            , br
+            , button AddEditingSrc "Add"
+            , text " "
+            , button DeleteEditingSrc "Delete"
+            , text " "
+            ]
         ]
 
 
