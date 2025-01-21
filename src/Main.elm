@@ -157,11 +157,11 @@ savedModelDecoder =
     JD.succeed SavedModel
         |> required "sources" sourcesDecoder
         |> optional "lastSources" sourcesDecoder []
-        |> required "srcIdx" JD.int
+        |> optional "srcIdx" JD.int 0
         |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
         |> optional "editingPanelIdx" (idxDecoder -1) -1
         |> optional "switchPeriod" JD.string "5"
-        |> required "switchEnabled" JD.bool
+        |> optional "switchEnabled" JD.bool True
         |> optional "showControls" JD.bool False
         |> optional "showEditingSources" JD.bool True
         |> optional "mergeEditingSources" JD.bool True
