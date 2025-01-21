@@ -587,7 +587,15 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         InputEditingSrc editingSrc ->
             -- TODO
-            { model | editingSrc = editingSrc }
+            { model
+                | editingSrc = editingSrc
+                , editingLabel =
+                    if getLabelFromFileName model.editingSrc == model.editingLabel then
+                        getLabelFromFileName editingSrc
+
+                    else
+                        model.editingLabel
+            }
                 |> withNoCmd
 
         InputEditingName name ->
@@ -1668,7 +1676,7 @@ viewEditingSourcesInternal model =
                         && (editingIdx /= -1)
               in
               p []
-                [ button AddEditingSrc "Add"
+                [ enabledButton (editingIdx /= -1) AddEditingSrc "Add"
                 , text " "
                 , enabledButton
                     ((editingIdx == model.editingIdx)
@@ -1684,7 +1692,9 @@ viewEditingSourcesInternal model =
                 , text " "
                 , enabledButton (editingIdx /= -1) LookupEditingSrc "Lookup"
                 , text " "
-                , enabledButton (not editingIdxChanged) DeleteEditingSrc "Delete"
+                , enabledButton (not (editingIdxChanged || editingIdx == -1))
+                    DeleteEditingSrc
+                    "Delete"
                 ]
             ]
         ]
