@@ -82,6 +82,11 @@ type alias Model =
     , showControls : Bool
     , showEditingSources : Bool
     , mergeEditingSources : Bool
+    , editingIdx : Int
+    , editingIdxstr : String
+    , editingSrc : String
+    , editingName : String
+    , editingUrl : String
     , copyFrom : CopyOption
     , copyTo : CopyOption
     , started : Started
@@ -279,6 +284,11 @@ init =
       , showControls = False
       , showEditingSources = True
       , mergeEditingSources = True
+      , editingIdx = 0
+      , editingIdxstr = ""
+      , editingSrc = ""
+      , editingName = ""
+      , editingUrl = ""
       , copyFrom = Editor
       , copyTo = Clipboard
       , started = NotStarted
@@ -358,6 +368,7 @@ type Msg
     | ToggleMergeEditingSources
     | AddEditingSrc
     | DeleteEditingSrc
+    | InputEditingIdxStr String
     | InputEditingSrc String
     | InputEditingName String
     | InputEditingUrl String
@@ -549,6 +560,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         DeleteEditingSrc ->
             -- TODO
+            model |> withNoCmd
+
+        InputEditingIdxStr idxstr ->
+            -- TODDO
             model |> withNoCmd
 
         InputEditingSrc editingSrc ->
@@ -1530,12 +1545,21 @@ viewEditingSourcesInternal model =
             let
                 viewSource : Int -> Source -> Html Msg
                 viewSource idx source =
+                    let
+                        idxstr =
+                            String.fromInt idx
+                    in
                     span []
                         -- TODO
-                        [ if idx == 0 then
+                        [ if idx == model.editingIdx then
                             span []
-                                [ text <| String.fromInt idx
-                                , text ": "
+                                [ input
+                                    [ onInput InputEditingIdxStr
+                                    , width 2
+                                    , value idxstr
+                                    ]
+                                    [ text idxstr ]
+                                , text " : "
                                 , button AddEditingSrc "Add"
                                 , text " "
                                 , button DeleteEditingSrc "Delete"
