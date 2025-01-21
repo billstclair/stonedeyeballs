@@ -375,6 +375,7 @@ type Msg
     | MoveEditingSrc
     | LookupEditingSrc
     | DeleteEditingSrc
+    | PasteEditingSrc
     | InputEditingIdxStr String
     | InputEditingSrc String
     | InputEditingName String
@@ -581,6 +582,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             model |> withNoCmd
 
         DeleteEditingSrc ->
+            -- TODO
+            model |> withNoCmd
+
+        PasteEditingSrc ->
             -- TODO
             model |> withNoCmd
 
@@ -1632,7 +1637,7 @@ em string =
 viewEditingInstructions : Html msg
 viewEditingInstructions =
     p []
-        [ text "Text boxes below are: "
+        [ text "Text boxes above are: "
         , em "index"
         , text ", "
         , em "display"
@@ -1665,6 +1670,14 @@ viewEditingInstructions =
         , text ", and click Change button."
         , br
         , text "Change all (or none) and click Add button."
+        , br
+        , text "Paste is Add plus copy clipboard to "
+        , em "index"
+        , text "."
+        , br
+        , text "Add and Paste add to end if "
+        , em "index"
+        , text " is out of range or not an integer."
         ]
 
 
@@ -1680,8 +1693,7 @@ nothingIfBlank s =
 viewEditingSourcesInternal : Model -> Html Msg
 viewEditingSourcesInternal model =
     span []
-        [ viewEditingInstructions
-        , p []
+        [ p []
             -- TODO
             [ input
                 [ onInput InputEditingIdxStr
@@ -1740,7 +1752,7 @@ viewEditingSourcesInternal model =
                         && (editingIdx /= -1)
               in
               p []
-                [ enabledButton (editingIdx /= -1) AddEditingSrc "Add"
+                [ button AddEditingSrc "Add"
                 , text " "
                 , enabledButton
                     ((editingIdx == model.editingIdx)
@@ -1759,7 +1771,10 @@ viewEditingSourcesInternal model =
                 , enabledButton (not (editingIdxChanged || editingIdx == -1))
                     DeleteEditingSrc
                     "Delete"
+                , text " "
+                , button PasteEditingSrc "Paste"
                 ]
+            , viewEditingInstructions
             ]
         ]
 
