@@ -1592,7 +1592,7 @@ viewEditingInstructions =
         , em "url"
         , text ", and click Change button."
         , br
-        , text "Change all and click Add button."
+        , text "Change all (or none) and click Add button."
         ]
 
 
@@ -1682,7 +1682,7 @@ viewEditingSourcesInternal model =
                 , text " "
                 , enabledButton editingIdxChanged MoveEditingSrc "Move"
                 , text " "
-                , enabledButton editingIdxChanged LookupEditingSrc "Lookup"
+                , enabledButton (editingIdx /= -1) LookupEditingSrc "Lookup"
                 , text " "
                 , enabledButton (not editingIdxChanged) DeleteEditingSrc "Delete"
                 ]
