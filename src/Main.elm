@@ -18,6 +18,7 @@ import Dict exposing (Dict)
 import Html exposing (Attribute, Html, a, div, embed, hr, img, input, option, p, select, span, table, td, text, textarea, th, tr)
 import Html.Attributes exposing (checked, class, disabled, height, href, property, selected, src, style, target, title, type_, value, width)
 import Html.Events exposing (on, onClick, onInput, targetValue)
+import Html.Lazy as Lazy
 import Http
 import Json.Decode as JD exposing (Decoder)
 import Json.Decode.Pipeline as DP exposing (custom, hardcoded, optional, required)
@@ -70,6 +71,7 @@ type alias Model =
     , sources : List Source
     , lastSources : List Source
     , srcIdx : Int
+    , defaultSources : List Source
     , sourcePanels : List SourcePanel
     , editingPanelIdx : Int
     , justAddedEditingRow : Bool
@@ -272,6 +274,7 @@ init =
       , sources = [ stonedEyeballsSource ]
       , lastSources = [ stonedEyeballsSource ]
       , srcIdx = 0
+      , defaultSources = [ stonedEyeballsSource ]
       , sourcePanels = []
       , editingPanelIdx = -1
       , justAddedEditingRow = False
@@ -289,7 +292,7 @@ init =
       , editingSrc = stonedEyeballsUrl
       , editingName = ""
       , editingUrl = ""
-      , copyFrom = Editor
+      , copyFrom = Live
       , copyTo = Clipboard
       , started = NotStarted
       , funnelState = initialFunnelState
@@ -673,7 +676,8 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                                 model
                                     |> maybeAddNewSources sources
                     in
-                    mdl |> withNoCmd
+                    { mdl | defaultSources = sources }
+                        |> withNoCmd
 
         Process value ->
             case
@@ -1156,48 +1160,7 @@ viewInternal model =
             , target "_blank"
             ]
             [ text <| name ++ " (" ++ urlType url ++ ")" ]
-        , p []
-            (List.indexedMap
-                (\idx s ->
-                    let
-                        idxstr =
-                            String.fromInt idx
-
-                        idxElements =
-                            [ text special.nbsp
-                            , text idxstr
-                            , text special.nbsp
-                            ]
-
-                        idxName =
-                            case s.label of
-                                Just n ->
-                                    n
-
-                                Nothing ->
-                                    getNameFromFileName s.src
-                    in
-                    if idx == index then
-                        span [ title idxName ] <|
-                            idxElements
-                                ++ [ text " " ]
-
-                    else
-                        span []
-                            [ a
-                                [ href "#"
-                                , onClick <| OnKeyPress True True idxstr
-                                , style "text-decoration" "none"
-                                , title idxName
-                                ]
-                                [ span [ style "text-decoration" "underline" ]
-                                    idxElements
-                                ]
-                            , text " "
-                            ]
-                )
-                model.sources
-            )
+        , Lazy.lazy2 viewSourceLinks index model.sources
         , p []
             [ let
                 keys =
@@ -1243,8 +1206,10 @@ viewInternal model =
                     ]
                     [ text "Bill St. Clair" ]
                 ]
-            , br
-            , showControlsButton model
+            , p []
+                [ button ReloadFromServer "Reload code from server" ]
+            , p []
+                [ showControlsButton model ]
             , if model.showControls then
                 p []
                     [ hr [] []
@@ -1253,10 +1218,54 @@ viewInternal model =
 
               else
                 text ""
-            , p []
-                [ button ReloadFromServer "Reload code from server" ]
             ]
         ]
+
+
+viewSourceLinks : Int -> List Source -> Html Msg
+viewSourceLinks index sources =
+    p []
+        (List.indexedMap
+            (\idx s ->
+                let
+                    idxstr =
+                        String.fromInt idx
+
+                    idxElements =
+                        [ text special.nbsp
+                        , text idxstr
+                        , text special.nbsp
+                        ]
+
+                    idxName =
+                        case s.label of
+                            Just n ->
+                                n
+
+                            Nothing ->
+                                getNameFromFileName s.src
+                in
+                if idx == index then
+                    span [ title idxName ] <|
+                        idxElements
+                            ++ [ text " " ]
+
+                else
+                    span []
+                        [ a
+                            [ href "#"
+                            , onClick <| OnKeyPress True True idxstr
+                            , style "text-decoration" "none"
+                            , title idxName
+                            ]
+                            [ span [ style "text-decoration" "underline" ]
+                                idxElements
+                            ]
+                        , text " "
+                        ]
+            )
+            sources
+        )
 
 
 showControlsButton : Model -> Html Msg
@@ -1347,7 +1356,6 @@ viewSaveDeleteButtons model =
 type CopyOption
     = Clipboard
     | Live
-    | Editor
     | Panel
 
 
@@ -1360,16 +1368,13 @@ copyOptionLabel copyOption =
         Live ->
             "Live"
 
-        Editor ->
-            "Sources Editor"
-
         Panel ->
             "Selected Panel"
 
 
 copyPlaces : List CopyOption
 copyPlaces =
-    [ Clipboard, Live, Editor, Panel ]
+    [ Clipboard, Live, Panel ]
 
 
 viewCopyButtons : Model -> Html Msg
@@ -1407,9 +1412,6 @@ isFromSelectable option model =
             True
 
         Live ->
-            True
-
-        Editor ->
             True
 
         Panel ->
@@ -1535,18 +1537,52 @@ viewSourcePanel model idx panel =
         ]
 
 
+em : String -> Html msg
+em string =
+    Html.em [] [ text string ]
+
+
+viewEditingInstructions : Html msg
+viewEditingInstructions =
+    p []
+        [ text "Text boxes are: "
+        , em "index"
+        , text ", "
+        , em "display"
+        , text ", "
+        , em "label"
+        , text ", "
+        , em "url."
+        , br
+        , em "label"
+        , text " allows you to override the file name default."
+        , br
+        , em "url"
+        , text " allows you to open a different page than the "
+        , em "display"
+        , text " image on click."
+        , br
+        , text "Change "
+        , em "index"
+        , text " to move or lookup (press button)."
+        , br
+        , text "Change "
+        , em "display"
+        , text ", "
+        , em "label"
+        , text ", or "
+        , em "url"
+        , text " to immeditely update."
+        , br
+        , text "Change all and Add."
+        ]
+
+
 viewEditingSourcesInternal : Model -> Html Msg
 viewEditingSourcesInternal model =
     span []
-        [ text "Text boxes are: index, display, label, url"
-        , br
-        , text "Change index to move or lookup (press button)."
-        , br
-        , text "Change display, label, or url to immeditely update."
-        , br
-        , text "Change all and Add."
-        , br
-        , span []
+        [ viewEditingInstructions
+        , p []
             -- TODO
             [ input
                 [ onInput InputEditingIdxStr
@@ -1578,11 +1614,11 @@ viewEditingSourcesInternal model =
                 , value model.editingUrl
                 ]
                 [ text model.editingUrl ]
-            , br
-            , button AddEditingSrc "Add"
-            , text " "
-            , button DeleteEditingSrc "Delete"
-            , text " "
+            , p []
+                [ button AddEditingSrc "Add"
+                , text " "
+                , button DeleteEditingSrc "Delete"
+                ]
             ]
         ]
 
