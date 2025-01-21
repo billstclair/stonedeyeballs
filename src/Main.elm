@@ -47,7 +47,7 @@ sourceLabel s =
             label
 
         Nothing ->
-            getNameFromFileName s.src
+            getLabelFromFileName s.src
 
 
 sourceUrl : Source -> String
@@ -87,7 +87,7 @@ type alias Model =
     , editingIdx : Int
     , editingIdxStr : String
     , editingSrc : String
-    , editingName : String
+    , editingLabel : String
     , editingUrl : String
     , copyFrom : CopyOption
     , copyTo : CopyOption
@@ -290,7 +290,7 @@ init =
       , editingIdx = 0
       , editingIdxStr = "0"
       , editingSrc = stonedEyeballsUrl
-      , editingName = ""
+      , editingLabel = getLabelFromFileName stonedEyeballsUrl
       , editingUrl = ""
       , copyFrom = Live
       , copyTo = Clipboard
@@ -370,6 +370,9 @@ type Msg
     | ToggleShowEditingSources
     | ToggleMergeEditingSources
     | AddEditingSrc
+    | ChangeEditingSrc
+    | MoveEditingSrc
+    | LookupEditingSrc
     | DeleteEditingSrc
     | InputEditingIdxStr String
     | InputEditingSrc String
@@ -561,6 +564,18 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             -- TODO
             model |> withNoCmd
 
+        ChangeEditingSrc ->
+            -- TODO
+            model |> withNoCmd
+
+        MoveEditingSrc ->
+            -- TODO
+            model |> withNoCmd
+
+        LookupEditingSrc ->
+            -- TODO
+            model |> withNoCmd
+
         DeleteEditingSrc ->
             -- TODO
             model |> withNoCmd
@@ -577,7 +592,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         InputEditingName name ->
             -- TODO
-            { model | editingName = name }
+            { model | editingLabel = name }
                 |> withNoCmd
 
         InputEditingUrl url ->
@@ -966,7 +981,8 @@ digitKey digit modelIn =
             { modelIn | lastSwapTime = modelIn.time }
     in
     if index >= 0 && index < List.length model.sources then
-        { model | srcIdx = index }
+        -- TODO
+        model
 
     else
         model
@@ -1008,8 +1024,8 @@ viewImage model index =
     { model | srcIdx = index }
 
 
-getNameFromFileName : String -> String
-getNameFromFileName filename =
+getLabelFromFileName : String -> String
+getLabelFromFileName filename =
     let
         noType =
             SE.leftOfBack "." filename
@@ -1051,7 +1067,7 @@ modelLabel model =
                     l
 
                 _ ->
-                    getNameFromFileName s.src
+                    getLabelFromFileName s.src
 
         Nothing ->
             ""
@@ -1243,7 +1259,7 @@ viewSourceLinks index sources =
                                 n
 
                             Nothing ->
-                                getNameFromFileName s.src
+                                getLabelFromFileName s.src
                 in
                 if idx == index then
                     span [ title idxName ] <|
@@ -1380,7 +1396,8 @@ copyPlaces =
 viewCopyButtons : Model -> Html Msg
 viewCopyButtons model =
     p []
-        [ b "Copy from: "
+        [ button Copy "Copy"
+        , b " from: "
         , select
             [ on "change" <| JD.map SetCopyFrom targetValue ]
             (List.map
@@ -1395,8 +1412,6 @@ viewCopyButtons model =
             (List.map (\option -> viewOption False isToSelected isToSelectable option model)
                 copyPlaces
             )
-        , text " "
-        , button Copy "Copy"
         ]
 
 
@@ -1448,10 +1463,10 @@ viewEditingSources model =
     span []
         [ button ToggleShowEditingSources <|
             if model.showEditingSources then
-                "Hide sources"
+                "Hide editor"
 
             else
-                "Show sources"
+                "Show editor"
         , br
         , if not model.showEditingSources then
             text ""
@@ -1545,7 +1560,7 @@ em string =
 viewEditingInstructions : Html msg
 viewEditingInstructions =
     p []
-        [ text "Text boxes are: "
+        [ text "Text boxes below are: "
         , em "index"
         , text ", "
         , em "display"
@@ -1553,6 +1568,9 @@ viewEditingInstructions =
         , em "label"
         , text ", "
         , em "url."
+        , br
+        , em "display"
+        , text " is a URL or a builtin image name."
         , br
         , em "label"
         , text " allows you to override the file name default."
@@ -1562,20 +1580,29 @@ viewEditingInstructions =
         , em "display"
         , text " image on click."
         , br
-        , text "Change "
+        , text "Modify "
         , em "index"
-        , text " to move or lookup (press button)."
+        , text ", and click Move or Lookup button"
         , br
-        , text "Change "
+        , text "Modify "
         , em "display"
         , text ", "
         , em "label"
         , text ", or "
         , em "url"
-        , text " to immeditely update."
+        , text ", and click Change button."
         , br
-        , text "Change all and Add."
+        , text "Change all and click Add button."
         ]
+
+
+nothingIfBlank : String -> Maybe String
+nothingIfBlank s =
+    if s == "" then
+        Nothing
+
+    else
+        Just s
 
 
 viewEditingSourcesInternal : Model -> Html Msg
@@ -1604,9 +1631,9 @@ viewEditingSourcesInternal model =
             , input
                 [ onInput InputEditingName
                 , width 20
-                , value model.editingName
+                , value model.editingLabel
                 ]
-                [ text model.editingName ]
+                [ text model.editingLabel ]
             , text " "
             , input
                 [ onInput InputEditingUrl
@@ -1614,10 +1641,50 @@ viewEditingSourcesInternal model =
                 , value model.editingUrl
                 ]
                 [ text model.editingUrl ]
-            , p []
+            , let
+                source =
+                    Maybe.withDefault (srcSource "") <|
+                        LE.getAt model.editingIdx model.sources
+
+                editingIdx =
+                    Maybe.withDefault -1 <|
+                        String.toInt model.editingIdxStr
+
+                editingLabel =
+                    if model.editingLabel == getLabelFromFileName source.src then
+                        Nothing
+
+                    else if model.editingLabel == "" then
+                        Nothing
+
+                    else
+                        Just model.editingLabel
+
+                editingUrl =
+                    nothingIfBlank model.editingUrl
+
+                editingIdxChanged =
+                    (editingIdx /= model.editingIdx)
+                        && (editingIdx /= -1)
+              in
+              p []
                 [ button AddEditingSrc "Add"
                 , text " "
-                , button DeleteEditingSrc "Delete"
+                , enabledButton
+                    ((editingIdx == model.editingIdx)
+                        && ((source.src /= model.editingSrc)
+                                || (source.label /= editingLabel)
+                                || (source.url /= editingUrl)
+                           )
+                    )
+                    ChangeEditingSrc
+                    "Change"
+                , text " "
+                , enabledButton editingIdxChanged MoveEditingSrc "Move"
+                , text " "
+                , enabledButton editingIdxChanged LookupEditingSrc "Lookup"
+                , text " "
+                , enabledButton (not editingIdxChanged) DeleteEditingSrc "Delete"
                 ]
             ]
         ]
