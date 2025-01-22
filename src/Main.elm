@@ -575,8 +575,52 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 |> withNoCmd
 
         ChangeEditingSrc ->
-            -- TODO
-            model |> withNoCmd
+            let
+                idx =
+                    model.editingIdx
+
+                sources =
+                    model.sources
+            in
+            case LE.getAt idx sources of
+                Nothing ->
+                    model |> withNoCmd
+
+                Just source ->
+                    let
+                        src =
+                            model.editingSrc
+
+                        label =
+                            model.editingLabel
+
+                        defaultLabel =
+                            getLabelFromFileName src
+
+                        newLabel =
+                            if label == defaultLabel then
+                                ""
+
+                            else
+                                label
+
+                        newSource =
+                            { source
+                                | src = src
+                                , label = nothingIfBlank newLabel
+                                , url = nothingIfBlank model.editingUrl
+                            }
+
+                        newSources =
+                            LE.setAt idx newSource sources
+                    in
+                    { model
+                        | sources = newSources
+                        , lastSources = newSources
+                        , srcIdx = idx
+                    }
+                        |> initializeEditingFields idx source
+                        |> withNoCmd
 
         MoveEditingSrc ->
             -- TODO
@@ -587,8 +631,32 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             model |> withNoCmd
 
         DeleteEditingSrc ->
-            -- TODO
-            model |> withNoCmd
+            -- TODO: undo
+            if List.length model.sources <= 1 then
+                model |> withNoCmd
+
+            else
+                let
+                    newSources =
+                        LE.removeAt model.editingIdx model.sources
+
+                    newIdx =
+                        max 0 <| model.editingIdx - 1
+
+                    mdl =
+                        { model
+                            | sources = newSources
+                            , lastSources = newSources
+                            , srcIdx = newIdx
+                        }
+                in
+                case LE.getAt newIdx newSources of
+                    Nothing ->
+                        mdl |> withNoCmd
+
+                    Just source ->
+                        initializeEditingFields newIdx source mdl
+                            |> withNoCmd
 
         PasteEditingSrc ->
             -- TODO
@@ -731,6 +799,29 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     res
 
 
+initializeEditingFields : Int -> Source -> Model -> Model
+initializeEditingFields idx source model =
+    let
+        defaultLabel =
+            getLabelFromFileName source.src
+
+        label =
+            case source.label of
+                Nothing ->
+                    defaultLabel
+
+                Just l ->
+                    l
+    in
+    { model
+        | editingIdx = idx
+        , editingIdxStr = String.fromInt idx
+        , editingSrc = source.src
+        , editingLabel = label
+        , editingUrl = Maybe.withDefault "" source.url
+    }
+
+
 addSource : Maybe Int -> Source -> Model -> Model
 addSource maybeIdx source model =
     let
@@ -763,7 +854,7 @@ insertInList insertIdx item items =
                 insertIdx
 
         ( head, tail ) =
-            LE.splitAt insertIdx items
+            LE.splitAt idx items
     in
     ( idx, head ++ (item :: tail) )
 
@@ -814,7 +905,7 @@ maybeAddNewSources sources model =
         in
         { model
             | sources = sources ++ newSources
-            , lastSources = model.lastSources ++ newSources
+            , lastSources = model.sources ++ newSources
         }
 
 
