@@ -566,8 +566,13 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 |> withNoCmd
 
         AddEditingSrc ->
-            -- TODO
-            model |> withNoCmd
+            addSource (String.toInt model.editingIdxStr)
+                { src = model.editingSrc
+                , label = nothingIfBlank model.editingLabel
+                , url = nothingIfBlank model.editingUrl
+                }
+                model
+                |> withNoCmd
 
         ChangeEditingSrc ->
             -- TODO
@@ -724,6 +729,43 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
                 Ok res ->
                     res
+
+
+addSource : Maybe Int -> Source -> Model -> Model
+addSource maybeIdx source model =
+    let
+        sources =
+            model.sources
+
+        idx =
+            Maybe.withDefault -1 maybeIdx
+
+        ( srcIdx, newSources ) =
+            insertInList idx source sources
+    in
+    { model
+        | sources = newSources
+        , srcIdx = srcIdx
+    }
+
+
+insertInList : Int -> a -> List a -> ( Int, List a )
+insertInList insertIdx item items =
+    let
+        len =
+            List.length items
+
+        idx =
+            if insertIdx < 0 || insertIdx > len then
+                len
+
+            else
+                insertIdx
+
+        ( head, tail ) =
+            LE.splitAt insertIdx items
+    in
+    ( idx, head ++ (item :: tail) )
 
 
 getSourcePanel : Int -> List SourcePanel -> Maybe (List Source)
