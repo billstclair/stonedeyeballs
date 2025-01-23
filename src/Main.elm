@@ -119,6 +119,7 @@ type alias Model =
     , switchEnabled : Bool
     , showControls : Bool
     , showEditingSources : Bool
+    , showHelp : Bool
     , mergeEditingSources : Bool
     , editingIdx : Int
     , editingIdxStr : String
@@ -142,6 +143,7 @@ type alias SavedModel =
     , switchEnabled : Bool
     , showControls : Bool
     , showEditingSources : Bool
+    , showHelp : Bool
     , mergeEditingSources : Bool
     }
 
@@ -167,6 +169,7 @@ modelToSavedModel model =
     , switchEnabled = model.switchEnabled
     , showControls = model.showControls
     , showEditingSources = model.showEditingSources
+    , showHelp = model.showHelp
     , mergeEditingSources = model.mergeEditingSources
     }
 
@@ -183,6 +186,7 @@ savedModelToModel savedModel model =
         , switchEnabled = savedModel.switchEnabled
         , showControls = savedModel.showControls
         , showEditingSources = savedModel.showEditingSources
+        , showHelp = savedModel.showHelp
         , mergeEditingSources = savedModel.mergeEditingSources
     }
 
@@ -221,6 +225,7 @@ savedModelDecoder =
         |> optional "switchEnabled" JD.bool True
         |> optional "showControls" JD.bool False
         |> optional "showEditingSources" JD.bool True
+        |> optional "showHelp" JD.bool True
         |> optional "mergeEditingSources" JD.bool True
 
 
@@ -301,6 +306,7 @@ encodeSavedModel savedModel =
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
         , ( "showEditingSources", JE.bool savedModel.showEditingSources )
+        , ( "showHelp", JE.bool savedModel.showHelp )
         , ( "mergeEditingSources", JE.bool savedModel.mergeEditingSources )
         ]
 
@@ -338,6 +344,7 @@ init =
       , switchEnabled = True
       , showControls = False
       , showEditingSources = True
+      , showHelp = True
       , mergeEditingSources = True
       , editingIdx = 0
       , editingIdxStr = "0"
@@ -421,13 +428,13 @@ type Msg
     | ToggleSwitchEnabled
     | ToggleControls
     | ToggleShowEditingSources
+    | ToggleShowHelp
     | ToggleMergeEditingSources
     | AddEditingSrc
     | ChangeEditingSrc
     | MoveEditingSrc
     | LookupEditingSrc
     | DeleteEditingSrc
-    | PasteEditingSrc
     | InputEditingIdxStr String
     | InputEditingSrc String
     | InputEditingName String
@@ -613,6 +620,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model | showEditingSources = not model.showEditingSources }
                 |> withNoCmd
 
+        ToggleShowHelp ->
+            { model | showHelp = not model.showHelp }
+                |> withNoCmd
+
         ToggleMergeEditingSources ->
             { model | mergeEditingSources = not model.mergeEditingSources }
                 |> withNoCmd
@@ -663,12 +674,44 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                         |> withNoCmd
 
         MoveEditingSrc ->
-            -- TODO
-            model |> withNoCmd
+            case LE.getAt model.editingIdx model.sources of
+                Nothing ->
+                    model |> withNoCmd
+
+                Just source ->
+                    let
+                        sources =
+                            LE.removeAt model.editingIdx model.sources
+
+                        idx =
+                            Maybe.withDefault -1 <| String.toInt model.editingIdxStr
+
+                        ( newIdx, newSources ) =
+                            insertInList idx source sources
+
+                        mdl =
+                            { model
+                                | sources = newSources
+                                , srcIdx = newIdx
+                            }
+                    in
+                    mdl
+                        |> setEditingFields newIdx source
+                        |> withNoCmd
 
         LookupEditingSrc ->
-            -- TODO
-            model |> withNoCmd
+            let
+                idx =
+                    Maybe.withDefault -1 <| String.toInt model.editingIdxStr
+            in
+            case LE.getAt idx model.sources of
+                Nothing ->
+                    model |> withNoCmd
+
+                Just source ->
+                    model
+                        |> setEditingFields idx source
+                        |> withNoCmd
 
         DeleteEditingSrc ->
             -- TODO: undo
@@ -696,10 +739,6 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     Just source ->
                         setEditingFields newIdx source mdl
                             |> withNoCmd
-
-        PasteEditingSrc ->
-            -- TODO
-            model |> withNoCmd
 
         InputEditingIdxStr idxstr ->
             -- TODDO
@@ -1549,6 +1588,16 @@ showControlsButton model =
             "Show Controls"
 
 
+showHelpButton : Model -> Html Msg
+showHelpButton model =
+    button ToggleShowHelp <|
+        if model.showHelp then
+            "Hide help"
+
+        else
+            "Show help"
+
+
 h1 : String -> Html Msg
 h1 title =
     Html.h1 [] [ text title ]
@@ -1738,6 +1787,8 @@ viewSourcePanels : Model -> Html Msg
 viewSourcePanels model =
     span []
         [ h3 "Source Panels"
+        , span [ style "color" "red" ]
+            [ text "More to come here" ]
         , p []
             [ p [] [ button AddSourcePanel "Add" ]
             , p []
@@ -1812,50 +1863,66 @@ em string =
     Html.em [] [ text string ]
 
 
-viewEditingInstructions : Html msg
-viewEditingInstructions =
-    p []
-        [ text "Text boxes above are: "
-        , em "index"
-        , text ", "
-        , em "display"
-        , text ", "
-        , em "label"
-        , text ", "
-        , em "url."
-        , br
-        , em "display"
-        , text " is a URL or a builtin image name."
-        , br
-        , em "label"
-        , text " allows you to override the file name default."
-        , br
-        , em "url"
-        , text " allows you to open a different page than the "
-        , em "display"
-        , text " image on click."
-        , br
-        , text "Modify "
-        , em "index"
-        , text ", and click Move or Lookup button"
-        , br
-        , text "Modify "
-        , em "display"
-        , text ", "
-        , em "label"
-        , text ", or "
-        , em "url"
-        , text ", and click Change button."
-        , br
-        , text "Change all (or none) and click Add button."
-        , br
-        , text "Paste is Add plus copy clipboard to "
-        , em "index"
-        , text "."
-        , br
-        , text "Add and Paste add to end if "
-        , em "index"
-        , text " is out of range or not an integer."
+viewHelp : Html msg
+viewHelp =
+    span []
+        [ p []
+            [ text "Text boxes above are: "
+            , em "index"
+            , text ", "
+            , em "display"
+            , text ", "
+            , em "label"
+            , text ", "
+            , em "url."
+            , br
+            , em "display"
+            , text " is a URL or a builtin image path."
+            , br
+            , em "label"
+            , text " allows you to override the file name default."
+            , br
+            , em "url"
+            , text " allows you to open a different page than the "
+            , em "display"
+            , text " image on click."
+            , br
+            , text "Modify "
+            , em "index"
+            , text ", and click Move or Lookup button"
+            , br
+            , text "Modify "
+            , em "display"
+            , text ", "
+            , em "label"
+            , text ", or "
+            , em "url"
+            , text ", and click Change button."
+            , br
+            , text "Change all (or none) and click Add button."
+            , br
+            , text "Paste is Add plus copy clipboard to "
+            , em "index"
+            , text "."
+            , br
+            , text "Add and Paste add to end if "
+            , em "index"
+            , text " is out of range or not an integer."
+            ]
+        , p []
+            [ text "The Add button makes a new record after the index."
+            , br
+            , text "If the index is non-numeric, negative, "
+            , text "or too large, adds to the end."
+            , br
+            , text "The Change button updates the record with your changes."
+            , br
+            , text "The Move button moves the current record to the changed index."
+            , br
+            , text "The Lookup button refreshes the editing fields from the index."
+            , br
+            , text "The Delete button deletes the record."
+            ]
         ]
 
 
@@ -1942,17 +2009,25 @@ viewEditingSourcesInternal model =
                     ChangeEditingSrc
                     "Change"
                 , text " "
-                , enabledButton editingIdxChanged MoveEditingSrc "Move"
+                , enabledButton (editingIdx /= model.editingIdx)
+                    MoveEditingSrc
+                    "Move"
                 , text " "
                 , enabledButton (editingIdx /= -1) LookupEditingSrc "Lookup"
                 , text " "
                 , enabledButton (not (editingIdxChanged || editingIdx == -1))
                     DeleteEditingSrc
                     "Delete"
-                , text " "
-                , button PasteEditingSrc "Paste"
                 ]
-            , viewEditingInstructions
+            , showHelpButton model
+            , if not model.showHelp then
+                text ""
+
+              else
+                span []
+                    [ viewHelp
+                    , showHelpButton model
+                    ]
             ]
         ]
 
