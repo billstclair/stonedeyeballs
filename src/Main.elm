@@ -2,6 +2,8 @@ module Main exposing (main)
 
 {-| TODO:
 
+Why did my customizations clear after the update on 250123-13:04?
+
 Add save/restore area for lists of urls.
 
 JSON should be updated after index.json is merged.
@@ -1627,14 +1629,14 @@ viewControls model =
             , viewEditingSources model
             , viewSourcePanels model
             , p []
-                [ showControlsButton model ]
-            , p []
                 [ if model.reallyDeleteState then
                     button DeleteState "Really Delete State"
 
                   else
                     button DeleteState "Delete State (after confirmation)"
                 ]
+            , p []
+                [ showControlsButton model ]
             ]
         ]
 
