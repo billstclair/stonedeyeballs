@@ -40,6 +40,42 @@ type alias Source =
     }
 
 
+canonicalizeSource : Source -> Source
+canonicalizeSource source =
+    let
+        default =
+            getLabelFromFileName source.src
+
+        maybeLabel =
+            case source.label of
+                Nothing ->
+                    Nothing
+
+                Just label ->
+                    if label == default then
+                        Nothing
+
+                    else
+                        nothingIfBlank label
+
+        maybeUrl =
+            case source.url of
+                Nothing ->
+                    Nothing
+
+                Just url ->
+                    nothingIfBlank url
+    in
+    if source.label == maybeLabel && source.url == maybeUrl then
+        source
+
+    else
+        { source
+            | label = maybeLabel
+            , url = maybeUrl
+        }
+
+
 sourceLabel : Source -> String
 sourceLabel s =
     case s.label of
@@ -69,9 +105,9 @@ type alias SourcePanel =
 type alias Model =
     { err : Maybe String
     , sources : List Source
-    , lastSources : List Source
+    , lastSources : List String
     , srcIdx : Int
-    , defaultSources : List Source
+    , defaultSources : List Source -- written, but not yet read
     , sourcePanels : List SourcePanel
     , editingPanelIdx : Int
     , justAddedEditingRow : Bool
@@ -98,7 +134,7 @@ type alias Model =
 
 type alias SavedModel =
     { sources : List Source
-    , lastSources : List Source
+    , lastSources : List String
     , srcIdx : Int
     , sourcePanels : List SourcePanel
     , editingPanelIdx : Int
@@ -159,11 +195,25 @@ idxDecoder default =
         ]
 
 
+lastSourcesDecoder : Decoder (List String)
+lastSourcesDecoder =
+    JD.oneOf
+        [ JD.list JD.string
+        , sourcesDecoder
+            -- `lastSources` used to be `List Source`.
+            |> JD.andThen
+                (\sources ->
+                    List.map .src sources
+                        |> JD.succeed
+                )
+        ]
+
+
 savedModelDecoder : Decoder SavedModel
 savedModelDecoder =
     JD.succeed SavedModel
         |> required "sources" sourcesDecoder
-        |> optional "lastSources" sourcesDecoder []
+        |> optional "lastSources" lastSourcesDecoder []
         |> optional "srcIdx" JD.int 0
         |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
         |> optional "editingPanelIdx" (idxDecoder -1) -1
@@ -200,10 +250,12 @@ sourceDecoder =
         [ JD.string
             |> JD.andThen
                 (\s -> srcSource s |> JD.succeed)
-        , JD.succeed Source
+        , (JD.succeed Source
             |> required "src" JD.string
             |> optional "label" (JD.nullable JD.string) Nothing
             |> optional "url" (JD.nullable JD.string) Nothing
+          )
+            |> JD.andThen (\s -> canonicalizeSource s |> JD.succeed)
         ]
 
 
@@ -241,7 +293,7 @@ encodeSavedModel : SavedModel -> Value
 encodeSavedModel savedModel =
     JE.object
         [ ( "sources", JE.list encodeSource savedModel.sources )
-        , ( "lastSources", JE.list encodeSource savedModel.lastSources )
+        , ( "lastSources", JE.list JE.string savedModel.lastSources )
         , ( "srcIdx", JE.int savedModel.srcIdx )
         , ( "sourcePanels", JE.list encodeSourcePanel savedModel.sourcePanels )
         , ( "editingPanelIdx", JE.int savedModel.editingPanelIdx )
@@ -272,7 +324,7 @@ init : ( Model, Cmd Msg )
 init =
     ( { err = Nothing
       , sources = [ stonedEyeballsSource ]
-      , lastSources = [ stonedEyeballsSource ]
+      , lastSources = [ stonedEyeballsUrl ]
       , srcIdx = 0
       , defaultSources = [ stonedEyeballsSource ]
       , sourcePanels = []
@@ -591,35 +643,23 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                         src =
                             model.editingSrc
 
-                        label =
-                            model.editingLabel
-
-                        defaultLabel =
-                            getLabelFromFileName src
-
-                        newLabel =
-                            if label == defaultLabel then
-                                ""
-
-                            else
-                                label
-
                         newSource =
                             { source
                                 | src = src
-                                , label = nothingIfBlank newLabel
-                                , url = nothingIfBlank model.editingUrl
+                                , label = Just model.editingLabel
+                                , url = Just model.editingUrl
                             }
+                                |> canonicalizeSource
 
                         newSources =
                             LE.setAt idx newSource sources
                     in
                     { model
                         | sources = newSources
-                        , lastSources = newSources
+                        , lastSources = src :: model.lastSources |> uniqueifyList
                         , srcIdx = idx
                     }
-                        |> initializeEditingFields idx source
+                        |> setEditingFields idx newSource
                         |> withNoCmd
 
         MoveEditingSrc ->
@@ -646,7 +686,6 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     mdl =
                         { model
                             | sources = newSources
-                            , lastSources = newSources
                             , srcIdx = newIdx
                         }
                 in
@@ -655,7 +694,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                         mdl |> withNoCmd
 
                     Just source ->
-                        initializeEditingFields newIdx source mdl
+                        setEditingFields newIdx source mdl
                             |> withNoCmd
 
         PasteEditingSrc ->
@@ -672,7 +711,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model
                 | editingSrc = editingSrc
                 , editingLabel =
-                    if getLabelFromFileName model.editingSrc == model.editingLabel then
+                    if model.editingLabel == "" then
                         getLabelFromFileName editingSrc
 
                     else
@@ -774,12 +813,13 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                                 List.map srcSource list
 
                         mdl =
-                            if setSourcesList then
-                                { model | sources = sources }
+                            initializeEditingFields <|
+                                if setSourcesList then
+                                    { model | sources = sources }
 
-                            else
-                                model
-                                    |> maybeAddNewSources sources
+                                else
+                                    model
+                                        |> maybeAddNewSources sources
                     in
                     { mdl | defaultSources = sources }
                         |> withNoCmd
@@ -799,16 +839,32 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     res
 
 
-initializeEditingFields : Int -> Source -> Model -> Model
-initializeEditingFields idx source model =
-    let
-        defaultLabel =
-            getLabelFromFileName source.src
+uniqueifyList : List a -> List a
+uniqueifyList list =
+    AS.fromList list |> AS.toList
 
+
+initializeEditingFields : Model -> Model
+initializeEditingFields model =
+    case LE.getAt model.srcIdx model.sources of
+        Just source ->
+            setEditingFields model.srcIdx source model
+
+        Nothing ->
+            if model.srcIdx == 0 then
+                model
+
+            else
+                initializeEditingFields { model | srcIdx = 0 }
+
+
+setEditingFields : Int -> Source -> Model -> Model
+setEditingFields idx source model =
+    let
         label =
             case source.label of
                 Nothing ->
-                    defaultLabel
+                    getLabelFromFileName source.src
 
                 Just l ->
                     l
@@ -892,7 +948,7 @@ maybeAddNewSources sources model =
     else
         let
             sourcesSet =
-                AS.fromList sources
+                AS.fromList (List.map .src sources)
 
             lastSourcesSet =
                 AS.fromList model.lastSources
@@ -904,8 +960,8 @@ maybeAddNewSources sources model =
                 AS.toList newSourcesSet
         in
         { model
-            | sources = sources ++ newSources
-            , lastSources = model.sources ++ newSources
+            | sources = sources ++ List.map srcSource newSources
+            , lastSources = model.lastSources ++ newSources
         }
 
 
@@ -1168,17 +1224,12 @@ isEditingCurrent model =
                         False
 
                     Just source ->
-                        let
-                            label =
-                                if model.editingLabel == "" then
-                                    Just <| getLabelFromFileName model.editingSrc
-
-                                else
-                                    Nothing
-                        in
-                        (source.src == model.editingSrc)
-                            && (source.label == label)
-                            && (source.url == nothingIfBlank model.editingUrl)
+                        canonicalizeSource source
+                            == canonicalizeSource
+                                { src = model.editingSrc
+                                , label = Just model.editingLabel
+                                , url = Just model.editingUrl
+                                }
 
 
 viewImage : Model -> Int -> Model
@@ -1463,18 +1514,12 @@ viewSourceLinks index sources =
                         , text special.nbsp
                         ]
 
-                    idxName =
-                        case s.label of
-                            Just n ->
-                                n
-
-                            Nothing ->
-                                getLabelFromFileName s.src
+                    label =
+                        sourceLabel s
                 in
                 if idx == index then
-                    span [ title idxName ] <|
-                        idxElements
-                            ++ [ text " " ]
+                    span [ title label ] <|
+                        (idxElements ++ [ text " " ])
 
                 else
                     span []
@@ -1482,7 +1527,7 @@ viewSourceLinks index sources =
                             [ href "#"
                             , onClick <| SetSrcIdx idxstr
                             , style "text-decoration" "none"
-                            , title idxName
+                            , title label
                             ]
                             [ span [ style "text-decoration" "underline" ]
                                 idxElements
