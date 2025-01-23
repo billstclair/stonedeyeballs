@@ -850,8 +850,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 Ok indexStrings ->
                     let
                         indexSources =
-                            Debug.log "GotIndex, indexSources" <|
-                                List.map srcSource indexStrings
+                            List.map srcSource indexStrings
 
                         mdl =
                             initializeEditingFields <|
@@ -1201,7 +1200,7 @@ handleGetModel maybeValue model =
                         |> withCmd (getIndexJson True)
 
                 Ok savedModel ->
-                    savedModelToModel (Debug.log "handleGetModel, savedModel" savedModel) model2
+                    savedModelToModel savedModel model2
                         |> withCmd (getIndexJson False)
 
 
