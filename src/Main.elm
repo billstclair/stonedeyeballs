@@ -847,22 +847,22 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     , Cmd.none
                     )
 
-                Ok list ->
+                Ok indexStrings ->
                     let
-                        sources =
-                            Debug.log "GotIndex, sources" <|
-                                List.map srcSource list
+                        indexSources =
+                            Debug.log "GotIndex, indexSources" <|
+                                List.map srcSource indexStrings
 
                         mdl =
                             initializeEditingFields <|
                                 if setSourcesList then
-                                    { model | sources = sources }
+                                    { model | sources = indexSources }
 
                                 else
                                     model
-                                        |> maybeAddNewSources sources
+                                        |> maybeAddNewSources indexStrings
                     in
-                    { mdl | defaultSources = sources }
+                    { mdl | defaultSources = indexSources }
                         |> withNoCmd
 
         Process value ->
@@ -981,27 +981,28 @@ newSourcePanelName panels =
     loop 1 "new"
 
 
-maybeAddNewSources : List Source -> Model -> Model
-maybeAddNewSources sources model =
+maybeAddNewSources : List String -> Model -> Model
+maybeAddNewSources indexStrings model =
     if not model.mergeEditingSources then
         model
 
     else
         let
-            sourcesSet =
-                AS.fromList (List.map .src sources)
+            indexStringsSet =
+                AS.fromList indexStrings
 
             lastSourcesSet =
                 AS.fromList model.lastSources
 
             newSourcesSet =
-                AS.diff sourcesSet lastSourcesSet
+                AS.diff indexStringsSet lastSourcesSet
 
             newSources =
-                AS.toList newSourcesSet
+                Debug.log "maybeAddNewSource, newsources" <|
+                    AS.toList newSourcesSet
         in
         { model
-            | sources = sources ++ List.map srcSource newSources
+            | sources = model.sources ++ List.map srcSource newSources
             , lastSources = model.lastSources ++ newSources
         }
 
@@ -1200,7 +1201,7 @@ handleGetModel maybeValue model =
                         |> withCmd (getIndexJson True)
 
                 Ok savedModel ->
-                    savedModelToModel savedModel model2
+                    savedModelToModel (Debug.log "handleGetModel, savedModel" savedModel) model2
                         |> withCmd (getIndexJson False)
 
 
