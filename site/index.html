@@ -42,33 +42,37 @@
             node: document.getElementById("elm-node")
         });
         PortFunnel.subscribe(app);
-        var clipboardWrite = app.ports.clipboardWrite;
-        if (clipboardWrite) {
-            clipboardWrite.subscribe(function(text) {
-                if (typeof(text) == 'string') {
-                    try {
-                        navigator.clipboard.writeText(text);
-                    } catch (error) {
-                        console.error("clipboard.writeText failed:", error);
-                    }
-                }
-            });
-        }
-        var clipboardContents = app.ports.clipboardContents;
-        if (clipboardContents) {
-            var clipboardRead = app.ports.clipboardRead;
-            if (clipboardRead) {
-                clipboardRead.subscribe(function() {
-                    try {
-                        navigator.clipboard.readText().then(function(data) {
-                            clipboardContents.send(data);
-                        });
-                    } catch (error) {
-                        console.error("clipboard.readText failed:", error);
+        if (navigator) {
+            var clipboardWrite = navigator.clipboard.writeText &&
+                app.ports.clipboardWrite;
+            if (clipboardWrite) {
+                clipboardWrite.subscribe(function(text) {
+                    if (typeof(text) == 'string') {
+                        try {
+                            navigator.clipboard.writeText(text);
+                        } catch (error) {
+                            console.error("clipboard.writeText failed:", error);
+                        }
                     }
                 });
             }
-        }                
+            var clipboardContents = app.ports.clipboardContents;
+            if (clipboardContents) {
+                var clipboardRead = navigator.clipboard.readText &&
+                    app.ports.clipboardRead;
+                if (clipboardRead) {
+                    clipboardRead.subscribe(function() {
+                        try {
+                            navigator.clipboard.readText().then(function(data) {
+                                clipboardContents.send(data);
+                            });
+                        } catch (error) {
+                            console.error("clipboard.readText failed:", error);
+                        }
+                    });
+                }
+            }                
+        }
       </script>
   </body>
 </html>

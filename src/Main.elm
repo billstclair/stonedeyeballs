@@ -1666,6 +1666,7 @@ viewControls model =
             , viewCopyButtons model
             , viewEditingSources model
             , viewSourcePanels model
+            , viewClipboardTest model
             , p []
                 [ if model.reallyDeleteState then
                     button DeleteState "Really Delete State"
@@ -1673,7 +1674,6 @@ viewControls model =
                   else
                     button DeleteState "Delete State (after confirmation)"
                 ]
-            , viewClipboardTest model
             , p []
                 [ showControlsButton model ]
             ]
