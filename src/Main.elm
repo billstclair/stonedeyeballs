@@ -1,4 +1,4 @@
-module Main exposing (main)
+port module Main exposing (main)
 
 {-| TODO:
 
@@ -130,6 +130,7 @@ type alias Model =
     , editingUrl : String
     , copyFrom : CopyOption
     , copyTo : CopyOption
+    , clipboard : String
     , started : Started
     , funnelState : State
     }
@@ -355,6 +356,7 @@ init =
       , editingUrl = ""
       , copyFrom = Live
       , copyTo = Clipboard
+      , clipboard = ""
       , started = NotStarted
       , funnelState = initialFunnelState
       }
@@ -449,6 +451,10 @@ type Msg
     | Copy
     | SetCopyFrom String
     | SetCopyTo String
+    | InputClipboard String
+    | ReadClipboard
+    | ClipboardContents String
+    | WriteClipboard
     | ReloadFromServer
     | DeleteState
     | Process Value
@@ -815,6 +821,22 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         SetCopyTo o ->
             model |> withNoCmd
+
+        InputClipboard s ->
+            { model | clipboard = s }
+                |> withNoCmd
+
+        ReadClipboard ->
+            { model | clipboard = "" }
+                |> withCmd (clipboardRead "")
+
+        ClipboardContents s ->
+            { model | clipboard = s }
+                |> withNoCmd
+
+        WriteClipboard ->
+            { model | clipboard = "" }
+                |> withCmd (clipboardWrite model.clipboard)
 
         ReloadFromServer ->
             model
@@ -1540,6 +1562,22 @@ viewInternal model =
         ]
 
 
+viewClipboardTest : Model -> Html Msg
+viewClipboardTest model =
+    p []
+        [ h3 "ClipboardTest"
+        , input
+            [ onInput InputClipboard
+            , value model.clipboard
+            ]
+            [ text model.clipboard ]
+        , text " "
+        , button WriteClipboard "Write"
+        , text " "
+        , button ReadClipboard "Read"
+        ]
+
+
 viewSourceLinks : Int -> List Source -> Html Msg
 viewSourceLinks index sources =
     p []
@@ -1635,6 +1673,7 @@ viewControls model =
                   else
                     button DeleteState "Delete State (after confirmation)"
                 ]
+            , viewClipboardTest model
             , p []
                 [ showControlsButton model ]
             ]
@@ -2123,6 +2162,7 @@ subscriptions model =
         , Time.every 100.0 ReceiveTime
         , PortFunnels.subscriptions Process model
         , Events.onKeyDown <| keyDecoder True
+        , clipboardContents ClipboardContents
 
         --, Events.onMouseDown mouseDownDecoder
         ]
@@ -2137,3 +2177,19 @@ keyDecoder keyDown =
 mouseDownDecoder : Decoder Msg
 mouseDownDecoder =
     JD.succeed MouseDown
+
+
+
+-- Clipboard support
+
+
+port clipboardWrite : String -> Cmd msg
+
+
+{-| arg ignored, use "".
+Initiates a clipboard read. String delivered via `clipboardContents`
+-}
+port clipboardRead : String -> Cmd msg
+
+
+port clipboardContents : (String -> msg) -> Sub msg
