@@ -1927,7 +1927,7 @@ viewCopyButtons model =
                 )
                 copyPlaces
             )
-        , text ", "
+        , text " "
         , b "to: "
         , select [ onInput SetCopyTo ]
             (List.map
@@ -2016,10 +2016,10 @@ viewSourcePanels : Model -> Html Msg
 viewSourcePanels model =
     span []
         [ h3 "Source Panels"
-        , span [ style "color" "red" ]
-            [ text "More to come here" ]
         , p []
             [ p [] [ button AddSourcePanel "Add" ]
+            , p [ style "color" "red" ]
+                [ text "More to come here" ]
             , p []
                 [ table [ class "prettyTable" ] <|
                     List.indexedMap
