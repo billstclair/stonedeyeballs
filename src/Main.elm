@@ -111,7 +111,7 @@ type alias Model =
     , srcIdx : Int
     , defaultSources : List Source -- written, but not yet read
     , sourcePanels : List SourcePanel
-    , editingPanelIdx : Int
+    , sourcePanelIdx : Int
     , justAddedEditingRow : Bool
     , time : Int
     , lastSwapTime : Int
@@ -141,7 +141,7 @@ type alias SavedModel =
     , lastSources : List String
     , srcIdx : Int
     , sourcePanels : List SourcePanel
-    , editingPanelIdx : Int
+    , sourcePanelIdx : Int
     , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
@@ -167,7 +167,7 @@ modelToSavedModel model =
     , lastSources = model.lastSources
     , srcIdx = model.srcIdx
     , sourcePanels = model.sourcePanels
-    , editingPanelIdx = model.editingPanelIdx
+    , sourcePanelIdx = model.sourcePanelIdx
     , switchPeriod = model.switchPeriod
     , switchEnabled = model.switchEnabled
     , showControls = model.showControls
@@ -184,7 +184,7 @@ savedModelToModel savedModel model =
         , lastSources = savedModel.lastSources
         , srcIdx = savedModel.srcIdx
         , sourcePanels = savedModel.sourcePanels
-        , editingPanelIdx = savedModel.editingPanelIdx
+        , sourcePanelIdx = savedModel.sourcePanelIdx
         , switchPeriod = savedModel.switchPeriod
         , switchEnabled = savedModel.switchEnabled
         , showControls = savedModel.showControls
@@ -223,7 +223,7 @@ savedModelDecoder =
         |> optional "lastSources" lastSourcesDecoder []
         |> optional "srcIdx" JD.int 0
         |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
-        |> optional "editingPanelIdx" (idxDecoder -1) -1
+        |> optional "sourcePanelIdx" (idxDecoder -1) -1
         |> optional "switchPeriod" JD.string "5"
         |> optional "switchEnabled" JD.bool True
         |> optional "showControls" JD.bool False
@@ -304,7 +304,7 @@ encodeSavedModel savedModel =
         , ( "lastSources", JE.list JE.string savedModel.lastSources )
         , ( "srcIdx", JE.int savedModel.srcIdx )
         , ( "sourcePanels", JE.list encodeSourcePanel savedModel.sourcePanels )
-        , ( "editingPanelIdx", JE.int savedModel.editingPanelIdx )
+        , ( "sourcePanelIdx", JE.int savedModel.sourcePanelIdx )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
@@ -337,7 +337,7 @@ init =
       , srcIdx = 0
       , defaultSources = [ stonedEyeballsSource ]
       , sourcePanels = []
-      , editingPanelIdx = -1
+      , sourcePanelIdx = -1
       , justAddedEditingRow = False
       , time = 0
       , lastSwapTime = 0
@@ -434,6 +434,7 @@ type Msg
     | ToggleShowEditingSources
     | ToggleShowHelp
     | ToggleMergeEditingSources
+    | DeleteAll
     | AddEditingSrc
     | ChangeEditingSrc
     | MoveEditingSrc
@@ -636,6 +637,18 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model | mergeEditingSources = not model.mergeEditingSources }
                 |> withNoCmd
 
+        DeleteAll ->
+            let
+                newSources =
+                    List.take 1 model.sources
+            in
+            { model
+                | sources = newSources
+                , srcIdx = 0
+            }
+                |> initializeEditingFields
+                |> withNoCmd
+
         AddEditingSrc ->
             addSource (String.toInt model.editingIdxStr)
                 { src = model.editingSrc
@@ -784,7 +797,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model
                 | sourcePanels =
                     { name = name, panels = model.sources } :: model.sourcePanels
-                , editingPanelIdx =
+                , sourcePanelIdx =
                     0
             }
                 |> withNoCmd
@@ -794,27 +807,28 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             model |> withNoCmd
 
         DeleteSourcePanel ->
-            { model | sourcePanels = LE.removeAt model.editingPanelIdx model.sourcePanels }
+            { model | sourcePanels = LE.removeAt model.sourcePanelIdx model.sourcePanels }
                 |> withNoCmd
 
         SelectEditingPanel idx ->
             -- TODO
+            -- remember to update copyTo and copyFrom, if the panel is deselected
             model |> withNoCmd
 
         InputEditingPanelName name ->
-            case getSourcePanel model.editingPanelIdx model.sourcePanels of
+            case getSourcePanel model.sourcePanelIdx model.sourcePanels of
                 Nothing ->
                     model |> withNoCmd
 
                 Just sources ->
                     { model
                         | sourcePanels =
-                            LE.updateAt model.editingPanelIdx (\p -> { p | name = name }) model.sourcePanels
+                            LE.updateAt model.sourcePanelIdx (\p -> { p | name = name }) model.sourcePanels
                     }
                         |> withNoCmd
 
         Copy ->
-            model |> withNoCmd
+            copyItems model
 
         SetCopyFrom o ->
             model |> withNoCmd
@@ -832,6 +846,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         ClipboardContents s ->
             { model | clipboard = s }
+                |> finishCopyFromClipboard s
                 |> withNoCmd
 
         WriteClipboard ->
@@ -899,6 +914,121 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
                 Ok res ->
                     res
+
+
+finishCopyFromClipboard : String -> Model -> Model
+finishCopyFromClipboard s model =
+    case JD.decodeString (JD.list sourceDecoder) s of
+        Err _ ->
+            case model.copyTo of
+                Live ->
+                    addSource (Just model.srcIdx) (srcSource s) model
+
+                _ ->
+                    model
+
+        Ok sources ->
+            case model.copyTo of
+                Clipboard ->
+                    model
+
+                Live ->
+                    { model
+                        | sources = sources
+                        , srcIdx = 0
+                    }
+                        |> initializeEditingFields
+
+                Panel ->
+                    copyToPanel sources model
+
+
+copyToPanel : List Source -> Model -> Model
+copyToPanel sources model =
+    let
+        idx =
+            model.sourcePanelIdx
+
+        panels =
+            model.sourcePanels
+    in
+    case LE.getAt idx panels of
+        Nothing ->
+            let
+                name =
+                    newSourcePanelName panels
+            in
+            { model
+                | sourcePanels =
+                    { name = name
+                    , panels = model.sources
+                    }
+                        :: panels
+                , sourcePanelIdx = 0
+            }
+
+        Just panel ->
+            let
+                newPanel =
+                    { name = panel.name
+                    , panels = model.sources
+                    }
+            in
+            { model
+                | sourcePanels =
+                    LE.setAt idx newPanel panels
+            }
+
+
+copyItems : Model -> ( Model, Cmd Msg )
+copyItems model =
+    case model.copyFrom of
+        Clipboard ->
+            { model | clipboard = "" }
+                |> withCmd (clipboardRead "")
+
+        Panel ->
+            case LE.getAt model.sourcePanelIdx model.sourcePanels of
+                Nothing ->
+                    model |> withNoCmd
+
+                Just panel ->
+                    case model.copyTo of
+                        Panel ->
+                            model |> withNoCmd
+
+                        Live ->
+                            { model
+                                | sources = panel.panels
+                                , srcIdx = 0
+                            }
+                                |> initializeEditingFields
+                                |> withNoCmd
+
+                        Clipboard ->
+                            let
+                                json =
+                                    JE.list encodeSource panel.panels
+                            in
+                            model
+                                |> withCmd (clipboardWrite <| JE.encode 0 json)
+
+        Live ->
+            case model.copyTo of
+                Live ->
+                    model |> withNoCmd
+
+                Clipboard ->
+                    let
+                        json =
+                            JE.list encodeSource model.sources
+                    in
+                    model
+                        |> withCmd (clipboardWrite <| JE.encode 0 json)
+
+                Panel ->
+                    copyToPanel model.sources model
+                        |> withNoCmd
 
 
 uniqueifyList : List a -> List a
@@ -1682,26 +1812,9 @@ viewControls model =
 
 viewSaveDeleteButtons : Model -> Html Msg
 viewSaveDeleteButtons model =
-    -- TODO
-    let
-        different =
-            True
-    in
     p []
-        [ enabledButton different
-            -- TODO
-            Noop
-            "Save"
-        , text " "
-
-        -- TODO
-        , button Noop
+        [ button DeleteAll
             "Delete all"
-        , text " "
-        , enabledButton different
-            -- TODO
-            Noop
-            "Restore"
         ]
 
 
@@ -1724,7 +1837,7 @@ copyOptionLabel : CopyOption -> String
 copyOptionLabel copyOption =
     case copyOption of
         Clipboard ->
-            "Clipboard (JSON)"
+            "Clipboard"
 
         Live ->
             "Live"
@@ -1760,6 +1873,12 @@ viewCopyButtons model =
         ]
 
 
+isPanelSelectable : Model -> Bool
+isPanelSelectable model =
+    (model.sourcePanelIdx > 0)
+        && (model.sourcePanelIdx < List.length model.sourcePanels)
+
+
 isFromSelected : CopyOption -> Model -> Bool
 isFromSelected option model =
     model.copyFrom == option
@@ -1769,13 +1888,14 @@ isFromSelectable : CopyOption -> Model -> Bool
 isFromSelectable option model =
     case model.copyFrom of
         Clipboard ->
+            -- I don't know how to tell if the clipboard is empty
             True
 
         Live ->
             True
 
         Panel ->
-            True
+            isPanelSelectable model
 
 
 isToSelected : CopyOption -> Model -> Bool
