@@ -1860,14 +1860,14 @@ viewCopyButtons model =
             [ on "change" <| JD.map SetCopyFrom targetValue ]
             (List.map
                 (\option ->
-                    viewOption True isFromSelected isFromSelectable option model
+                    viewOption isFromSelected isFromSelectable option model
                 )
                 copyPlaces
             )
         , text ", "
         , b "to: "
         , select [ on "change" <| JD.map SetCopyTo targetValue ]
-            (List.map (\option -> viewOption False isToSelected isToSelectable option model)
+            (List.map (\option -> viewOption isToSelected isToSelectable option model)
                 copyPlaces
             )
         ]
@@ -1909,8 +1909,8 @@ isToSelectable =
     isFromSelectable
 
 
-viewOption : Bool -> (CopyOption -> Model -> Bool) -> (CopyOption -> Model -> Bool) -> CopyOption -> Model -> Html Msg
-viewOption isEnabled isSelected isSelectable copyOption model =
+viewOption : (CopyOption -> Model -> Bool) -> (CopyOption -> Model -> Bool) -> CopyOption -> Model -> Html Msg
+viewOption isSelected isSelectable copyOption model =
     let
         label =
             copyOptionLabel copyOption
@@ -1918,7 +1918,7 @@ viewOption isEnabled isSelected isSelectable copyOption model =
     option
         [ value label
         , selected <| isSelected copyOption model
-        , disabled <| not isEnabled || not (isSelectable copyOption model)
+        , disabled <| not (isSelectable copyOption model)
         ]
         [ text label ]
 
