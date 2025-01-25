@@ -42,7 +42,7 @@
             node: document.getElementById("elm-node")
         });
         PortFunnel.subscribe(app);
-        if (navigator) {
+        if (navigator && navigator.clipboard) {
             var clipboardWrite = navigator.clipboard.writeText &&
                 app.ports.clipboardWrite;
             if (clipboardWrite) {
@@ -65,7 +65,8 @@
                         try {
                             navigator.clipboard.readText().then(function(data) {
                                 clipboardContents.send(data);
-                            });
+                            })
+                            .catch(function(err) {});
                         } catch (error) {
                             console.error("clipboard.readText failed:", error);
                         }

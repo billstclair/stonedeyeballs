@@ -830,11 +830,13 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
         Copy ->
             copyItems model
 
-        SetCopyFrom o ->
-            model |> withNoCmd
+        SetCopyFrom option ->
+            { model | copyFrom = labelCopyOption option }
+                |> withNoCmd
 
-        SetCopyTo o ->
-            model |> withNoCmd
+        SetCopyTo option ->
+            { model | copyTo = labelCopyOption option }
+                |> withNoCmd
 
         InputClipboard s ->
             { model | clipboard = s }
@@ -1846,6 +1848,22 @@ copyOptionLabel copyOption =
             "Selected Panel"
 
 
+labelCopyOption : String -> CopyOption
+labelCopyOption string =
+    case string of
+        "Clipboard" ->
+            Clipboard
+
+        "Live" ->
+            Live
+
+        "Selected Panel" ->
+            Panel
+
+        _ ->
+            Live
+
+
 copyPlaces : List CopyOption
 copyPlaces =
     [ Clipboard, Live, Panel ]
@@ -1857,17 +1875,26 @@ viewCopyButtons model =
         [ button Copy "Copy"
         , b " from: "
         , select
-            [ on "change" <| JD.map SetCopyFrom targetValue ]
+            [ onInput SetCopyFrom ]
             (List.map
                 (\option ->
-                    viewOption isFromSelected isFromSelectable option model
+                    viewOption isFromSelected
+                        isFromSelectable
+                        option
+                        model
                 )
                 copyPlaces
             )
         , text ", "
         , b "to: "
-        , select [ on "change" <| JD.map SetCopyTo targetValue ]
-            (List.map (\option -> viewOption isToSelected isToSelectable option model)
+        , select [ onInput SetCopyTo ]
+            (List.map
+                (\option ->
+                    viewOption isToSelected
+                        isToSelectable
+                        option
+                        model
+                )
                 copyPlaces
             )
         ]
@@ -1886,7 +1913,7 @@ isFromSelected option model =
 
 isFromSelectable : CopyOption -> Model -> Bool
 isFromSelectable option model =
-    case model.copyFrom of
+    case option of
         Clipboard ->
             -- I don't know how to tell if the clipboard is empty
             True
@@ -1904,9 +1931,8 @@ isToSelected option model =
 
 
 isToSelectable : CopyOption -> Model -> Bool
-isToSelectable =
-    -- TODO
-    isFromSelectable
+isToSelectable option model =
+    True
 
 
 viewOption : (CopyOption -> Model -> Bool) -> (CopyOption -> Model -> Bool) -> CopyOption -> Model -> Html Msg
