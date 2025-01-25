@@ -655,6 +655,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 , label = nothingIfBlank model.editingLabel
                 , url = nothingIfBlank model.editingUrl
                 }
+                False
                 model
                 |> withNoCmd
 
@@ -832,10 +833,12 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         SetCopyFrom option ->
             { model | copyFrom = labelCopyOption option }
+                |> fixCopyFromEqualsTo False
                 |> withNoCmd
 
         SetCopyTo option ->
             { model | copyTo = labelCopyOption option }
+                |> fixCopyFromEqualsTo True
                 |> withNoCmd
 
         InputClipboard s ->
@@ -918,13 +921,34 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                     res
 
 
+fixCopyFromEqualsTo : Bool -> Model -> Model
+fixCopyFromEqualsTo setCopyFrom model =
+    if model.copyFrom /= model.copyTo then
+        model
+
+    else
+        let
+            newOption =
+                if model.copyFrom /= Live then
+                    Live
+
+                else
+                    Clipboard
+        in
+        if setCopyFrom then
+            { model | copyFrom = newOption }
+
+        else
+            { model | copyTo = newOption }
+
+
 finishCopyFromClipboard : String -> Model -> Model
 finishCopyFromClipboard s model =
     case JD.decodeString (JD.list sourceDecoder) s of
         Err _ ->
             case model.copyTo of
                 Live ->
-                    addSource (Just model.srcIdx) (srcSource s) model
+                    addSource (Just <| model.srcIdx + 1) (srcSource s) True model
 
                 _ ->
                     model
@@ -939,7 +963,12 @@ finishCopyFromClipboard s model =
                         | sources = sources
                         , srcIdx = 0
                     }
-                        |> initializeEditingFields
+                        |> (if isEditingCurrent model then
+                                initializeEditingFields
+
+                            else
+                                identity
+                           )
 
                 Panel ->
                     copyToPanel sources model
@@ -984,53 +1013,57 @@ copyToPanel sources model =
 
 copyItems : Model -> ( Model, Cmd Msg )
 copyItems model =
-    case model.copyFrom of
-        Clipboard ->
-            { model | clipboard = "" }
-                |> withCmd (clipboardRead "")
+    if model.copyFrom == model.copyTo then
+        model |> withNoCmd
 
-        Panel ->
-            case LE.getAt model.sourcePanelIdx model.sourcePanels of
-                Nothing ->
-                    model |> withNoCmd
+    else
+        case model.copyFrom of
+            Clipboard ->
+                { model | clipboard = "" }
+                    |> withCmd (clipboardRead "")
 
-                Just panel ->
-                    case model.copyTo of
-                        Panel ->
-                            model |> withNoCmd
+            Panel ->
+                case LE.getAt model.sourcePanelIdx model.sourcePanels of
+                    Nothing ->
+                        model |> withNoCmd
 
-                        Live ->
-                            { model
-                                | sources = panel.panels
-                                , srcIdx = 0
-                            }
-                                |> initializeEditingFields
-                                |> withNoCmd
+                    Just panel ->
+                        case model.copyTo of
+                            Panel ->
+                                model |> withNoCmd
 
-                        Clipboard ->
-                            let
-                                json =
-                                    JE.list encodeSource panel.panels
-                            in
-                            model
-                                |> withCmd (clipboardWrite <| JE.encode 0 json)
+                            Live ->
+                                { model
+                                    | sources = panel.panels
+                                    , srcIdx = 0
+                                }
+                                    |> initializeEditingFields
+                                    |> withNoCmd
 
-        Live ->
-            case model.copyTo of
-                Live ->
-                    model |> withNoCmd
+                            Clipboard ->
+                                let
+                                    json =
+                                        JE.list encodeSource panel.panels
+                                in
+                                model
+                                    |> withCmd (clipboardWrite <| JE.encode 0 json)
 
-                Clipboard ->
-                    let
-                        json =
-                            JE.list encodeSource model.sources
-                    in
-                    model
-                        |> withCmd (clipboardWrite <| JE.encode 0 json)
+            Live ->
+                case model.copyTo of
+                    Live ->
+                        model |> withNoCmd
 
-                Panel ->
-                    copyToPanel model.sources model
-                        |> withNoCmd
+                    Clipboard ->
+                        let
+                            json =
+                                JE.list encodeSource model.sources
+                        in
+                        model
+                            |> withCmd (clipboardWrite <| JE.encode 0 json)
+
+                    Panel ->
+                        copyToPanel model.sources model
+                            |> withNoCmd
 
 
 uniqueifyList : List a -> List a
@@ -1072,8 +1105,8 @@ setEditingFields idx source model =
     }
 
 
-addSource : Maybe Int -> Source -> Model -> Model
-addSource maybeIdx source model =
+addSource : Maybe Int -> Source -> Bool -> Model -> Model
+addSource maybeIdx source updateEditor model =
     let
         sources =
             model.sources
@@ -1083,11 +1116,20 @@ addSource maybeIdx source model =
 
         ( srcIdx, newSources ) =
             insertInList idx source sources
+
+        editorChanged =
+            updateEditor && isEditingCurrent model
     in
     { model
         | sources = newSources
         , srcIdx = srcIdx
     }
+        |> (if editorChanged then
+                initializeEditingFields
+
+            else
+                identity
+           )
 
 
 insertInList : Int -> a -> List a -> ( Int, List a )
@@ -1866,7 +1908,7 @@ labelCopyOption string =
 
 copyPlaces : List CopyOption
 copyPlaces =
-    [ Clipboard, Live, Panel ]
+    [ Live, Clipboard, Panel ]
 
 
 viewCopyButtons : Model -> Html Msg
