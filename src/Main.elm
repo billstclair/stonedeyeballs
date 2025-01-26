@@ -468,7 +468,6 @@ type Msg
     | MouseDown
     | ReceiveTime Posix
     | SetVisible Visibility
-    | FocusInput String
     | SetSrcIdx String
     | OnKeyPress Bool String
     | InputSwitchPeriod String
@@ -618,9 +617,6 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         SetVisible v ->
             ( { model | visibility = Debug.log "visibility" v }, Cmd.none )
-
-        FocusInput id ->
-            model |> withCmd (focusInput id)
 
         SetSrcIdx idxStr ->
             digitKey idxStr model |> withNoCmd
@@ -856,7 +852,7 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 , sourcePanelIdx =
                     newIdx
             }
-                |> withNoCmd
+                |> withCmd (focusInput ids.sourcePanelName)
 
         SaveRestoreSourcePanel savep ->
             case LE.getAt model.sourcePanelIdx model.sourcePanels of
@@ -1067,8 +1063,7 @@ selectSourcePanel idx model =
 
                 else
                     ( idx
-                    , Task.perform FocusInput <|
-                        Task.succeed ids.sourcePanelName
+                    , focusInput ids.sourcePanelName
                     )
         in
         { model | sourcePanelIdx = i }
@@ -1080,8 +1075,6 @@ ids =
     }
 
 
-{-| `selectElement` never runs here. Don't know why.
--}
 focusInput : String -> Cmd Msg
 focusInput id =
     Task.perform SequenceCmds <|
