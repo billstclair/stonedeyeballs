@@ -103,24 +103,26 @@ type alias SourcePanel =
 
 
 type alias Model =
-    { err : Maybe String
-    , sources : List Source
+    { sources : List Source
     , lastSources : List String
     , srcIdx : Int
-    , defaultSources : List Source -- written, but not yet read
     , sourcePanels : List SourcePanel
-    , sourcePanelIdx : Int
-    , justAddedEditingRow : Bool
-    , time : Int
-    , lastSwapTime : Int
-    , reallyDeleteState : Bool
-    , visibility : Visibility
     , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
     , showEditingSources : Bool
     , showHelp : Bool
     , mergeEditingSources : Bool
+
+    -- Non-persistent below here
+    , err : Maybe String
+    , time : Int
+    , lastSwapTime : Int
+    , visibility : Visibility
+    , justAddedEditingRow : Bool
+    , reallyDeleteState : Bool
+    , defaultSources : List Source -- written, but not yet read
+    , sourcePanelIdx : Int
     , editingIdx : Int
     , editingIdxStr : String
     , editingSrc : String
@@ -324,24 +326,26 @@ srcSource src =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { err = Nothing
-      , sources = [ stonedEyeballsSource ]
+    ( { sources = [ stonedEyeballsSource ]
       , lastSources = [ stonedEyeballsUrl ]
       , srcIdx = 0
-      , defaultSources = [ stonedEyeballsSource ]
       , sourcePanels = []
-      , sourcePanelIdx = -1
-      , justAddedEditingRow = False
-      , time = 0
-      , lastSwapTime = 0
-      , reallyDeleteState = False
-      , visibility = Visible
       , switchPeriod = "5"
       , switchEnabled = True
       , showControls = False
       , showEditingSources = True
       , showHelp = True
       , mergeEditingSources = True
+
+      -- non-persistent below here
+      , err = Nothing
+      , time = 0
+      , lastSwapTime = 0
+      , visibility = Visible
+      , justAddedEditingRow = False
+      , reallyDeleteState = False
+      , defaultSources = [ stonedEyeballsSource ]
+      , sourcePanelIdx = -1
       , editingIdx = 0
       , editingIdxStr = "0"
       , editingSrc = stonedEyeballsUrl
