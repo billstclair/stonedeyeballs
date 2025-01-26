@@ -415,6 +415,7 @@ localStorageSend message =
 
 type Msg
     = Noop
+    | SequenceCmds (List (Cmd Msg))
     | GotIndex Bool (Result Http.Error (List String))
     | MouseDown
     | ReceiveTime Posix
@@ -954,6 +955,16 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
         Noop ->
             model |> withNoCmd
 
+        SequenceCmds commands ->
+            case commands of
+                [] ->
+                    model |> withNoCmd
+
+                first :: rest ->
+                    model
+                        |> withCmds
+                            [ first, Task.perform SequenceCmds <| Task.succeed rest ]
+
         GotIndex setSourcesList result ->
             case result of
                 Err e ->
@@ -1023,10 +1034,12 @@ ids =
 -}
 focusInput : String -> Cmd Msg
 focusInput id =
-    Dom.focus id
-        |> Task.andThen
-            (\_ -> Task.succeed <| selectElement id)
-        |> Task.attempt (\_ -> Noop)
+    Task.perform SequenceCmds <|
+        Task.succeed
+            [ Dom.focus id
+                |> Task.attempt (\_ -> Noop)
+            , selectElement id
+            ]
 
 
 fixCopyFromEqualsTo : Bool -> Model -> Model
@@ -1748,8 +1761,8 @@ viewInternal model =
         , style "max-height" "60em"
         , style "overflow" "auto"
         ]
-        [ --h2 "Stoned Eyeballs"
-          (if isImage then
+        [ text "" --h2 "Stoned Eyeballs"
+        , (if isImage then
             img
 
            else
