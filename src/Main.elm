@@ -4,7 +4,7 @@ port module Main exposing (main)
 
 Undo.
 
-Make `selectElement` get called in `focusInput`.
+Global persistence via Amazon database.
 
 -}
 
