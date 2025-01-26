@@ -6,13 +6,6 @@ Undo.
 
 Make `selectElement` get called in `focusInput`.
 
-Why did my customizations clear after the update on 250123-13:04?
-
-Add save/restore area for lists of urls.
-
-JSON should be updated after index.json is merged.
-This may mean that editingSources is set too soon.
-
 -}
 
 import AssocSet as AS exposing (Set)
