@@ -136,6 +136,50 @@ type alias Model =
     }
 
 
+type alias UndoModel =
+    { sources : List Source
+    , srcIdx : Int
+    , sourcePanels : List SourcePanel
+
+    -- Non-persistent below here
+    , sourcePanelIdx : Int
+    , editingIdx : Int
+    , editingIdxStr : String
+    , editingSrc : String
+    , editingLabel : String
+    , editingUrl : String
+    }
+
+
+modelToUndoModel : Model -> UndoModel
+modelToUndoModel model =
+    { sources = model.sources
+    , srcIdx = model.srcIdx
+    , sourcePanels = model.sourcePanels
+    , sourcePanelIdx = model.sourcePanelIdx
+    , editingIdx = model.editingIdx
+    , editingIdxStr = model.editingIdxStr
+    , editingSrc = model.editingSrc
+    , editingLabel = model.editingLabel
+    , editingUrl = model.editingUrl
+    }
+
+
+undoModelToModel : UndoModel -> Model -> Model
+undoModelToModel undoModel model =
+    { model
+        | sources = model.sources
+        , srcIdx = model.srcIdx
+        , sourcePanels = model.sourcePanels
+        , sourcePanelIdx = model.sourcePanelIdx
+        , editingIdx = model.editingIdx
+        , editingIdxStr = model.editingIdxStr
+        , editingSrc = model.editingSrc
+        , editingLabel = model.editingLabel
+        , editingUrl = model.editingUrl
+    }
+
+
 type alias SavedModel =
     { sources : List Source
     , lastSources : List String
