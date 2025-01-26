@@ -119,7 +119,6 @@ type alias Model =
     , time : Int
     , lastSwapTime : Int
     , visibility : Visibility
-    , justAddedEditingRow : Bool
     , reallyDeleteState : Bool
     , defaultSources : List Source -- written, but not yet read
     , sourcePanelIdx : Int
@@ -130,6 +129,7 @@ type alias Model =
     , editingUrl : String
     , copyFrom : CopyOption
     , copyTo : CopyOption
+    , undoModel : Maybe UndoModel
     , clipboard : String
     , started : Started
     , funnelState : State
@@ -178,6 +178,11 @@ undoModelToModel undoModel model =
         , editingLabel = model.editingLabel
         , editingUrl = model.editingUrl
     }
+
+
+markForUndo : Model -> Model
+markForUndo model =
+    { model | undoModel = Just <| modelToUndoModel model }
 
 
 type alias SavedModel =
@@ -386,7 +391,6 @@ init =
       , time = 0
       , lastSwapTime = 0
       , visibility = Visible
-      , justAddedEditingRow = False
       , reallyDeleteState = False
       , defaultSources = [ stonedEyeballsSource ]
       , sourcePanelIdx = -1
@@ -397,6 +401,7 @@ init =
       , editingUrl = ""
       , copyFrom = Live
       , copyTo = Clipboard
+      , undoModel = Nothing
       , clipboard = ""
       , started = NotStarted
       , funnelState = initialFunnelState
@@ -540,16 +545,8 @@ update msg model =
                 _ ->
                     True
 
-        preserveJustAddedEditingRow =
-            case msg of
-                InputEditingSrc _ ->
-                    True
-
-                _ ->
-                    False
-
         ( mdl, cmd ) =
-            updateInternal doUpdate preserveJustAddedEditingRow msg model
+            updateInternal doUpdate msg model
     in
     if doUpdate && mdl.started == Started && mdl /= model then
         let
@@ -564,22 +561,15 @@ update msg model =
         mdl |> withCmd cmd
 
 
-updateInternal : Bool -> Bool -> Msg -> Model -> ( Model, Cmd Msg )
-updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
+updateInternal : Bool -> Msg -> Model -> ( Model, Cmd Msg )
+updateInternal doUpdate msg modelIn =
     let
-        modelIn1 =
+        model =
             if msg == DeleteState || not doUpdate then
                 modelIn
 
             else
                 { modelIn | reallyDeleteState = False }
-
-        model =
-            if not preserveJustAddedEditingRow then
-                { modelIn1 | justAddedEditingRow = False }
-
-            else
-                modelIn1
     in
     case msg of
         MouseDown ->
