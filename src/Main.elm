@@ -438,7 +438,7 @@ type Msg
     | InputEditingSrc String
     | InputEditingName String
     | InputEditingUrl String
-    | AddSourcePanel
+    | AddSourcePanel Bool
     | SaveRestoreSourcePanel Bool
     | DeleteSourcePanel
     | MoveSourcePanelUp Bool
@@ -783,16 +783,29 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
             { model | editingUrl = url }
                 |> withNoCmd
 
-        AddSourcePanel ->
+        AddSourcePanel firstp ->
             let
                 name =
                     newSourcePanelName model.sourcePanels
+
+                idx =
+                    if firstp then
+                        0
+
+                    else
+                        model.sourcePanelIdx + 1
+
+                panel =
+                    { name = name, panels = model.sources }
+
+                ( newIdx, panels ) =
+                    insertInList idx panel model.sourcePanels
             in
             { model
                 | sourcePanels =
-                    { name = name, panels = model.sources } :: model.sourcePanels
+                    panels
                 , sourcePanelIdx =
-                    0
+                    newIdx
             }
                 |> withNoCmd
 
@@ -2117,7 +2130,7 @@ viewSourcePanels model =
     span []
         [ h3 "Source Panels"
         , p []
-            [ p [] [ button AddSourcePanel "Add" ]
+            [ p [] [ button (AddSourcePanel True) "Add" ]
             , p []
                 [ table [ class "prettyTable" ] <|
                     List.indexedMap
@@ -2172,7 +2185,7 @@ viewSourcePanel model idx panel =
                 , text " "
                 , button DeleteSourcePanel "Delete"
                 , text " "
-                , button AddSourcePanel "Add"
+                , button (AddSourcePanel False) "Add"
                 ]
         , td [ onClick <| SelectSourcePanel idx ] <|
             let
