@@ -42,6 +42,24 @@
             node: document.getElementById("elm-node")
         });
         PortFunnel.subscribe(app);
+
+        // Call the selectElement port with an element ID string
+        // to select its contents
+        var selectElement = app.ports.selectElement;
+        if (selectElement) {
+          selectElement.subscribe(function(id) {
+            var element = document.getElementById(id);
+            if (element) {
+              element.select();
+            };
+          });
+        }
+
+        // Clipboard support
+        // Three ports:
+        //   clipboardWrite <string>
+        //   clipboardRead <ignored arg>
+        //   clipboardContents (<string> sent here after clipboardRead())
         if (navigator && navigator.clipboard) {
             var clipboardWrite = navigator.clipboard.writeText &&
                 app.ports.clipboardWrite;

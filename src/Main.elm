@@ -2,6 +2,10 @@ port module Main exposing (main)
 
 {-| TODO:
 
+Undo.
+
+Make `selectElement` get called in `focusInput`.
+
 Why did my customizations clear after the update on 250123-13:04?
 
 Add save/restore area for lists of urls.
@@ -13,12 +17,13 @@ This may mean that editingSources is set too soon.
 
 import AssocSet as AS exposing (Set)
 import Browser
+import Browser.Dom as Dom
 import Browser.Events as Events exposing (Visibility(..))
 import Browser.Navigation as Navigation exposing (Key)
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
 import Html exposing (Attribute, Html, a, div, embed, hr, img, input, option, p, select, span, table, td, text, textarea, th, tr)
-import Html.Attributes exposing (checked, class, disabled, height, href, property, selected, src, style, target, title, type_, value, width)
+import Html.Attributes as Attributes exposing (checked, class, disabled, height, href, property, selected, src, style, target, title, type_, value, width)
 import Html.Events exposing (on, onClick, onInput, targetValue)
 import Html.Lazy as Lazy
 import Http
@@ -141,7 +146,6 @@ type alias SavedModel =
     , lastSources : List String
     , srcIdx : Int
     , sourcePanels : List SourcePanel
-    , sourcePanelIdx : Int
     , switchPeriod : String
     , switchEnabled : Bool
     , showControls : Bool
@@ -167,7 +171,6 @@ modelToSavedModel model =
     , lastSources = model.lastSources
     , srcIdx = model.srcIdx
     , sourcePanels = model.sourcePanels
-    , sourcePanelIdx = model.sourcePanelIdx
     , switchPeriod = model.switchPeriod
     , switchEnabled = model.switchEnabled
     , showControls = model.showControls
@@ -184,7 +187,6 @@ savedModelToModel savedModel model =
         , lastSources = savedModel.lastSources
         , srcIdx = savedModel.srcIdx
         , sourcePanels = savedModel.sourcePanels
-        , sourcePanelIdx = savedModel.sourcePanelIdx
         , switchPeriod = savedModel.switchPeriod
         , switchEnabled = savedModel.switchEnabled
         , showControls = savedModel.showControls
@@ -223,7 +225,6 @@ savedModelDecoder =
         |> optional "lastSources" lastSourcesDecoder []
         |> optional "srcIdx" JD.int 0
         |> optional "sourcePanels" (JD.list sourcePanelDecoder) []
-        |> optional "sourcePanelIdx" (idxDecoder -1) -1
         |> optional "switchPeriod" JD.string "5"
         |> optional "switchEnabled" JD.bool True
         |> optional "showControls" JD.bool False
@@ -304,7 +305,6 @@ encodeSavedModel savedModel =
         , ( "lastSources", JE.list JE.string savedModel.lastSources )
         , ( "srcIdx", JE.int savedModel.srcIdx )
         , ( "sourcePanels", JE.list encodeSourcePanel savedModel.sourcePanels )
-        , ( "sourcePanelIdx", JE.int savedModel.sourcePanelIdx )
         , ( "switchPeriod", JE.string savedModel.switchPeriod )
         , ( "switchEnabled", JE.bool savedModel.switchEnabled )
         , ( "showControls", JE.bool savedModel.showControls )
@@ -426,6 +426,7 @@ type Msg
     | MouseDown
     | ReceiveTime Posix
     | SetVisible Visibility
+    | FocusInput String
     | SetSrcIdx String
     | OnKeyPress Bool String
     | InputSwitchPeriod String
@@ -447,7 +448,8 @@ type Msg
     | AddSourcePanel
     | SaveRestoreSourcePanel Bool
     | DeleteSourcePanel
-    | SelectEditingPanel Int
+    | MoveSourcePanelUp Bool
+    | SelectSourcePanel Int
     | InputEditingPanelName String
     | Copy
     | SetCopyFrom String
@@ -574,6 +576,9 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
         SetVisible v ->
             ( { model | visibility = Debug.log "visibility" v }, Cmd.none )
+
+        FocusInput id ->
+            model |> withCmd (focusInput id)
 
         SetSrcIdx idxStr ->
             digitKey idxStr model |> withNoCmd
@@ -736,7 +741,6 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                         |> withNoCmd
 
         DeleteEditingSrc ->
-            -- TODO: undo
             if List.length model.sources <= 1 then
                 model |> withNoCmd
 
@@ -763,12 +767,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                             |> withNoCmd
 
         InputEditingIdxStr idxstr ->
-            -- TODDO
             { model | editingIdxStr = idxstr }
                 |> withNoCmd
 
         InputEditingSrc editingSrc ->
-            -- TODO
             { model
                 | editingSrc = editingSrc
                 , editingLabel =
@@ -781,12 +783,10 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 |> withNoCmd
 
         InputEditingName name ->
-            -- TODO
             { model | editingLabel = name }
                 |> withNoCmd
 
         InputEditingUrl url ->
-            -- TODO
             { model | editingUrl = url }
                 |> withNoCmd
 
@@ -804,27 +804,94 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 |> withNoCmd
 
         SaveRestoreSourcePanel savep ->
-            -- TODO
-            model |> withNoCmd
-
-        DeleteSourcePanel ->
-            { model | sourcePanels = LE.removeAt model.sourcePanelIdx model.sourcePanels }
-                |> withNoCmd
-
-        SelectEditingPanel idx ->
-            -- TODO
-            -- remember to update copyTo and copyFrom, if the panel is deselected
-            model |> withNoCmd
-
-        InputEditingPanelName name ->
-            case getSourcePanel model.sourcePanelIdx model.sourcePanels of
+            case LE.getAt model.sourcePanelIdx model.sourcePanels of
                 Nothing ->
                     model |> withNoCmd
 
-                Just sources ->
+                Just panel ->
+                    if savep then
+                        { model
+                            | sources = panel.panels
+                            , srcIdx = 0
+                        }
+                            |> initializeEditingFields
+                            |> withNoCmd
+
+                    else
+                        { model
+                            | sourcePanels =
+                                LE.setAt model.sourcePanelIdx
+                                    { panel | panels = model.sources }
+                                    model.sourcePanels
+                        }
+                            |> withNoCmd
+
+        DeleteSourcePanel ->
+            { model
+                | sourcePanels =
+                    LE.removeAt model.sourcePanelIdx model.sourcePanels
+                , sourcePanelIdx = -1
+            }
+                |> withNoCmd
+
+        MoveSourcePanelUp moveUp ->
+            if model.sourcePanelIdx < 0 then
+                model |> withNoCmd
+
+            else
+                let
+                    idx =
+                        model.sourcePanelIdx
+                            + (if moveUp then
+                                -1
+
+                               else
+                                1
+                              )
+                in
+                if idx < 0 || idx >= List.length model.sourcePanels then
+                    model |> withNoCmd
+
+                else
+                    let
+                        sourcePanelIdx =
+                            model.sourcePanelIdx
+
+                        sourcePanels =
+                            model.sourcePanels
+                    in
+                    case LE.getAt sourcePanelIdx sourcePanels of
+                        Nothing ->
+                            model |> withNoCmd
+
+                        Just panel ->
+                            let
+                                panels =
+                                    LE.removeAt sourcePanelIdx sourcePanels
+
+                                ( newIdx, newSourcePanels ) =
+                                    insertInList idx panel panels
+                            in
+                            { model
+                                | sourcePanels = newSourcePanels
+                                , sourcePanelIdx = newIdx
+                            }
+                                |> withNoCmd
+
+        SelectSourcePanel idx ->
+            selectSourcePanel idx model
+
+        InputEditingPanelName name ->
+            case LE.getAt model.sourcePanelIdx model.sourcePanels of
+                Nothing ->
+                    model |> withNoCmd
+
+                Just panel ->
                     { model
                         | sourcePanels =
-                            LE.updateAt model.sourcePanelIdx (\p -> { p | name = name }) model.sourcePanels
+                            LE.setAt model.sourcePanelIdx
+                                { panel | name = name }
+                                model.sourcePanels
                     }
                         |> withNoCmd
 
@@ -863,7 +930,6 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 |> withCmd Navigation.reloadAndSkipCache
 
         DeleteState ->
-            -- TODO
             if model.reallyDeleteState then
                 let
                     ( mdl, cmd ) =
@@ -919,6 +985,42 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
 
                 Ok res ->
                     res
+
+
+selectSourcePanel : Int -> Model -> ( Model, Cmd Msg )
+selectSourcePanel idx model =
+    if idx > List.length model.sourcePanels then
+        model |> withNoCmd
+
+    else
+        let
+            ( i, cmd ) =
+                if idx == model.sourcePanelIdx then
+                    ( -1, Cmd.none )
+
+                else
+                    ( idx
+                    , Task.perform FocusInput <|
+                        Task.succeed ids.sourcePanelName
+                    )
+        in
+        { model | sourcePanelIdx = i }
+            |> withCmd cmd
+
+
+ids =
+    { sourcePanelName = "sourcePanelName"
+    }
+
+
+{-| `selectElement` never runs here. Don't know why.
+-}
+focusInput : String -> Cmd Msg
+focusInput id =
+    Dom.focus id
+        |> Task.andThen
+            (\_ -> Task.succeed <| selectElement id)
+        |> Task.attempt (\_ -> Noop)
 
 
 fixCopyFromEqualsTo : Bool -> Model -> Model
@@ -1738,6 +1840,11 @@ viewInternal model =
 
 viewClipboardTest : Model -> Html Msg
 viewClipboardTest model =
+    text ""
+
+
+viewClipboardTestNoMore : Model -> Html Msg
+viewClipboardTestNoMore model =
     p []
         [ h3 "ClipboardTest"
         , input
@@ -2018,8 +2125,6 @@ viewSourcePanels model =
         [ h3 "Source Panels"
         , p []
             [ p [] [ button AddSourcePanel "Add" ]
-            , p [ style "color" "red" ]
-                [ text "More to come here" ]
             , p []
                 [ table [ class "prettyTable" ] <|
                     List.indexedMap
@@ -2038,46 +2143,62 @@ viewSourcePanel model idx panel =
         sources =
             panel.panels
 
-        names =
-            List.take 2 sources |> List.map .src |> List.intersperse ", "
-
-        canSave =
-            -- TODO
-            False
-
         isEditing =
-            -- TODO
-            False
+            idx == model.sourcePanelIdx
     in
-    tr [ onClick <| SelectEditingPanel idx ]
-        [ th []
-            [ if not isEditing then
-                text panel.name
+    tr []
+        [ if not isEditing then
+            th [ onClick <| SelectSourcePanel idx ]
+                [ text panel.name ]
 
-              else
-                span []
-                    [ input
-                        [ onInput InputEditingPanelName
-                        , width 10
-                        , value panel.name
-                        , style "min-height" "1em"
-                        , style "min-width" "10em"
-                        ]
-                        [ text panel.name ]
-                    , text " "
-                    , enabledButton canSave (SaveRestoreSourcePanel True) "Save"
-                    , text " "
-                    , enabledButton canSave (SaveRestoreSourcePanel False) "Restore"
-                    , text " "
-                    , button DeleteSourcePanel "Delete"
-                    , text " "
-                    , button AddSourcePanel "Add"
+          else
+            let
+                isFirst =
+                    model.sourcePanelIdx == 0
+
+                isLast =
+                    model.sourcePanelIdx == List.length model.sourcePanels - 1
+            in
+            th [ style "text-align" "left" ]
+                [ input
+                    [ onInput InputEditingPanelName
+                    , value panel.name
+                    , style "width" "100%"
+                    , style "min-height" "1em"
+                    , style "min-width" "10em"
+                    , Attributes.id ids.sourcePanelName
                     ]
-            ]
-        , td [] <|
+                    [ text panel.name ]
+                , br
+                , button (SaveRestoreSourcePanel True) "Install"
+                , text " "
+                , button (SaveRestoreSourcePanel False) "Set"
+                , br
+                , enabledButton (not isFirst) (MoveSourcePanelUp True) "^"
+                , enabledButton (not isLast) (MoveSourcePanelUp False) "v"
+                , text " "
+                , button DeleteSourcePanel "Delete"
+                , text " "
+                , button AddSourcePanel "Add"
+                ]
+        , td [ onClick <| SelectSourcePanel idx ] <|
+            let
+                sourcesCnt =
+                    List.length sources
+
+                nameCnt =
+                    2
+
+                names =
+                    List.take nameCnt sources |> List.map .src |> List.intersperse ", "
+            in
             List.concat
-                [ List.map text names
-                , [ if List.length names < List.length sources then
+                [ [ text "("
+                  , text <| String.fromInt sourcesCnt
+                  , text ") "
+                  ]
+                , List.map text names
+                , [ if nameCnt < sourcesCnt then
                         text ", ..."
 
                     else
@@ -2168,7 +2289,6 @@ viewEditingSourcesInternal : Model -> Html Msg
 viewEditingSourcesInternal model =
     span []
         [ p []
-            -- TODO
             [ input
                 [ onInput InputEditingIdxStr
                 , width 2
@@ -2365,6 +2485,11 @@ keyDecoder keyDown =
 mouseDownDecoder : Decoder Msg
 mouseDownDecoder =
     JD.succeed MouseDown
+
+
+{-| Call this to select the contents of a text input element
+-}
+port selectElement : String -> Cmd msg
 
 
 
