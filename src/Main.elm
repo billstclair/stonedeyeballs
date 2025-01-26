@@ -1742,8 +1742,8 @@ viewInternal model =
         , style "max-height" "60em"
         , style "overflow" "auto"
         ]
-        [ h2 "Stoned Eyeballs"
-        , (if isImage then
+        [ --h2 "Stoned Eyeballs"
+          (if isImage then
             img
 
            else
