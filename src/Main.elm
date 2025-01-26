@@ -967,7 +967,9 @@ updateInternal doUpdate preserveJustAddedEditingRow msg modelIn =
                 first :: rest ->
                     model
                         |> withCmds
-                            [ first, Task.perform SequenceCmds <| Task.succeed rest ]
+                            [ first
+                            , delay 1 <| SequenceCmds rest
+                            ]
 
         GotIndex setSourcesList result ->
             case result of
@@ -2197,12 +2199,12 @@ viewSourcePanel model idx panel =
                 , text " "
                 , button (SaveRestoreSourcePanel False) "Set"
                 , br
-                , enabledButton (not isFirst) (MoveSourcePanelUp True) "^"
-                , enabledButton (not isLast) (MoveSourcePanelUp False) "v"
+                , button (AddSourcePanel False) "Add"
                 , text " "
                 , button DeleteSourcePanel "Delete"
                 , text " "
-                , button (AddSourcePanel False) "Add"
+                , enabledButton (not isFirst) (MoveSourcePanelUp True) "^"
+                , enabledButton (not isLast) (MoveSourcePanelUp False) "v"
                 ]
         , td [ onClick <| SelectSourcePanel idx ] <|
             let
