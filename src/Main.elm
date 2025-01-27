@@ -623,7 +623,7 @@ updateInternal doUpdate msg modelIn =
         OnKeyPress isDown key ->
             let
                 ( leftKeys, rightKeys ) =
-                    if model.showControls then
+                    if model.isFocused then
                         ( [ "ArrowLeft" ]
                         , [ "ArrowRight" ]
                         )
@@ -652,7 +652,7 @@ updateInternal doUpdate msg modelIn =
             else if List.member key rightKeys then
                 nextImage mdl |> withNoCmd
 
-            else if not model.showControls && key >= "0" && key <= "9" then
+            else if not model.isFocused && key >= "0" && key <= "9" then
                 digitKey key mdl |> withNoCmd
 
             else if lastKeyWasCommand && (key == "z") then
@@ -1914,7 +1914,7 @@ viewInternal model =
         , p []
             [ let
                 keys =
-                    if model.showControls then
+                    if model.isFocused then
                         "arrows"
 
                     else
@@ -1928,6 +1928,7 @@ viewInternal model =
             , b ", period: "
             , focusTrackingInput
                 [ onInput InputSwitchPeriod
+                , value model.switchPeriod
                 , width 2
                 , style "min-height" "1em"
                 , style "width" "2em"
