@@ -15,7 +15,7 @@ import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
 import Html exposing (Attribute, Html, a, div, embed, hr, img, input, option, p, select, span, table, td, text, textarea, th, tr)
 import Html.Attributes as Attributes exposing (checked, class, disabled, height, href, property, selected, src, style, target, title, type_, value, width)
-import Html.Events exposing (on, onClick, onInput, targetValue)
+import Html.Events exposing (on, onBlur, onClick, onFocus, onInput, targetValue)
 import Html.Lazy as Lazy
 import Http
 import Json.Decode as JD exposing (Decoder)
@@ -128,6 +128,8 @@ type alias Model =
     , copyFrom : CopyOption
     , copyTo : CopyOption
     , undoModel : Maybe UndoModel
+    , lastKey : String
+    , isFocused : Bool
     , clipboard : String
     , started : Started
     , funnelState : State
@@ -395,6 +397,8 @@ init =
       , copyFrom = Live
       , copyTo = Clipboard
       , undoModel = Nothing
+      , lastKey = ""
+      , isFocused = False
       , clipboard = ""
       , started = NotStarted
       , funnelState = initialFunnelState
@@ -494,6 +498,7 @@ type Msg
     | SetCopyFrom String
     | SetCopyTo String
     | Undo
+    | Focus Bool
     | InputClipboard String
     | ReadClipboard
     | ClipboardContents String
@@ -627,21 +632,48 @@ updateInternal doUpdate msg modelIn =
                         ( [ "ArrowLeft", "j", "J", "d", "D", "s", "S" ]
                         , [ "ArrowRight", "l", "L", "k", "K", "f", "F" ]
                         )
+
+                lastKey =
+                    model.lastKey
+
+                mdl =
+                    { model | lastKey = key }
+
+                lastKeyWasCommand =
+                    not model.isFocused
+                        && (lastKey == "Control" || lastKey == "Meta")
             in
             if not isDown then
-                model |> withNoCmd
+                { mdl | lastKey = "" } |> withNoCmd
 
             else if List.member key leftKeys then
-                prevImage model |> withNoCmd
+                prevImage mdl |> withNoCmd
 
             else if List.member key rightKeys then
-                nextImage model |> withNoCmd
+                nextImage mdl |> withNoCmd
 
             else if not model.showControls && key >= "0" && key <= "9" then
-                digitKey key model |> withNoCmd
+                digitKey key mdl |> withNoCmd
+
+            else if lastKeyWasCommand && (key == "z") then
+                undo mdl |> withNoCmd
+
+            else if lastKeyWasCommand && (key == "c") then
+                copyItems
+                    { model
+                        | copyFrom = Live
+                        , copyTo = Clipboard
+                    }
+
+            else if lastKeyWasCommand && (key == "v") then
+                copyItems
+                    { model
+                        | copyFrom = Clipboard
+                        , copyTo = Live
+                    }
 
             else
-                model |> withNoCmd
+                mdl |> withNoCmd
 
         InputSwitchPeriod string ->
             { model | switchPeriod = string }
@@ -965,21 +997,11 @@ updateInternal doUpdate msg modelIn =
                 |> withNoCmd
 
         Undo ->
-            case model.undoModel of
-                Nothing ->
-                    model |> withNoCmd
+            undo model |> withNoCmd
 
-                Just undoModel ->
-                    let
-                        mdl =
-                            undoModelToModel undoModel model
-                    in
-                    { mdl | undoModel = Nothing }
-                        -- It could be argued that the editing fields
-                        -- should return to what they were before the
-                        -- undone command. I found this confusing
-                        |> initializeEditingFields
-                        |> withNoCmd
+        Focus isFocused ->
+            { model | isFocused = isFocused }
+                |> withNoCmd
 
         InputClipboard s ->
             { model | clipboard = s }
@@ -1070,6 +1092,24 @@ updateInternal doUpdate msg modelIn =
 
                 Ok res ->
                     res
+
+
+undo : Model -> Model
+undo model =
+    case model.undoModel of
+        Nothing ->
+            model
+
+        Just undoModel ->
+            let
+                mdl =
+                    undoModelToModel undoModel model
+            in
+            { mdl | undoModel = Nothing }
+                -- It could be argued that the editing fields
+                -- should return to what they were before the
+                -- undone command. I found this confusing
+                |> initializeEditingFields
 
 
 selectSourcePanel : Int -> Model -> ( Model, Cmd Msg )
@@ -1317,6 +1357,7 @@ addSource maybeIdx source updateEditor model =
     { model
         | sources = newSources
         , srcIdx = srcIdx
+        , undoModel = Just <| modelToUndoModel model
     }
         |> (if editorChanged then
                 initializeEditingFields
@@ -1772,6 +1813,19 @@ imgTypes =
     String.split "," "jpg,jpeg,gif,png,svg,webp"
 
 
+focusTrackingInput : List (Attribute Msg) -> List (Html Msg) -> Html Msg
+focusTrackingInput attributes elements =
+    input
+        (List.concat
+            [ attributes
+            , [ onFocus <| Focus True
+              , onBlur <| Focus False
+              ]
+            ]
+        )
+        elements
+
+
 viewInternal : Model -> Html Msg
 viewInternal model =
     let
@@ -1872,9 +1926,8 @@ viewInternal model =
                 model.switchEnabled
                 "Auto-switch images"
             , b ", period: "
-            , input
+            , focusTrackingInput
                 [ onInput InputSwitchPeriod
-                , value model.switchPeriod
                 , width 2
                 , style "min-height" "1em"
                 , style "width" "2em"
@@ -1927,7 +1980,7 @@ viewClipboardTestNoMore : Model -> Html Msg
 viewClipboardTestNoMore model =
     p []
         [ h3 "ClipboardTest"
-        , input
+        , focusTrackingInput
             [ onInput InputClipboard
             , value model.clipboard
             ]
@@ -2242,7 +2295,7 @@ viewSourcePanel model idx panel =
                     model.sourcePanelIdx == List.length model.sourcePanels - 1
             in
             th [ style "text-align" "left" ]
-                [ input
+                [ focusTrackingInput
                     [ onInput InputEditingPanelName
                     , value panel.name
                     , style "width" "100%"
@@ -2371,7 +2424,7 @@ viewEditingSourcesInternal : Model -> Html Msg
 viewEditingSourcesInternal model =
     span []
         [ p []
-            [ input
+            [ focusTrackingInput
                 [ onInput InputEditingIdxStr
                 , width 2
                 , value model.editingIdxStr
@@ -2379,7 +2432,7 @@ viewEditingSourcesInternal model =
                 ]
                 [ text model.editingIdxStr ]
             , text " : "
-            , input
+            , focusTrackingInput
                 [ onInput InputEditingSrc
                 , width 30
                 , value model.editingSrc
@@ -2388,14 +2441,14 @@ viewEditingSourcesInternal model =
                 ]
                 [ text model.editingSrc ]
             , text " "
-            , input
+            , focusTrackingInput
                 [ onInput InputEditingName
                 , width 20
                 , value model.editingLabel
                 ]
                 [ text model.editingLabel ]
             , text " "
-            , input
+            , focusTrackingInput
                 [ onInput InputEditingUrl
                 , width 20
                 , value model.editingUrl
