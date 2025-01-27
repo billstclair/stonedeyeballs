@@ -2,6 +2,8 @@ port module Main exposing (main)
 
 {-| TODO:
 
+Clicking on an embedded non-image file should work as expected. It currently does nothing.
+
 Global persistence via Amazon database.
 
 -}
