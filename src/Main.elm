@@ -2,8 +2,6 @@ port module Main exposing (main)
 
 {-| TODO:
 
-Undo.
-
 Global persistence via Amazon database.
 
 -}
@@ -168,21 +166,16 @@ modelToUndoModel model =
 undoModelToModel : UndoModel -> Model -> Model
 undoModelToModel undoModel model =
     { model
-        | sources = model.sources
-        , srcIdx = model.srcIdx
-        , sourcePanels = model.sourcePanels
-        , sourcePanelIdx = model.sourcePanelIdx
-        , editingIdx = model.editingIdx
-        , editingIdxStr = model.editingIdxStr
-        , editingSrc = model.editingSrc
-        , editingLabel = model.editingLabel
-        , editingUrl = model.editingUrl
+        | sources = undoModel.sources
+        , srcIdx = undoModel.srcIdx
+        , sourcePanels = undoModel.sourcePanels
+        , sourcePanelIdx = undoModel.sourcePanelIdx
+        , editingIdx = undoModel.editingIdx
+        , editingIdxStr = undoModel.editingIdxStr
+        , editingSrc = undoModel.editingSrc
+        , editingLabel = undoModel.editingLabel
+        , editingUrl = undoModel.editingUrl
     }
-
-
-markForUndo : Model -> Model
-markForUndo model =
-    { model | undoModel = Just <| modelToUndoModel model }
 
 
 type alias SavedModel =
@@ -500,6 +493,7 @@ type Msg
     | Copy
     | SetCopyFrom String
     | SetCopyTo String
+    | Undo
     | InputClipboard String
     | ReadClipboard
     | ClipboardContents String
@@ -545,8 +539,17 @@ update msg model =
                 _ ->
                     True
 
+        undoneModel =
+            if False && doUpdate && msg /= Undo then
+                { model | undoModel = Nothing }
+
+            else
+                model
+
         ( mdl, cmd ) =
-            updateInternal doUpdate msg model
+            updateInternal doUpdate
+                msg
+                undoneModel
     in
     if doUpdate && mdl.started == Started && mdl /= model then
         let
@@ -609,7 +612,8 @@ updateInternal doUpdate msg modelIn =
             ( { model | visibility = Debug.log "visibility" v }, Cmd.none )
 
         SetSrcIdx idxStr ->
-            digitKey idxStr model |> withNoCmd
+            digitKey idxStr model
+                |> withNoCmd
 
         OnKeyPress isDown key ->
             let
@@ -678,6 +682,7 @@ updateInternal doUpdate msg modelIn =
             { model
                 | sources = newSources
                 , srcIdx = 0
+                , undoModel = Just <| modelToUndoModel model
             }
                 |> initializeEditingFields
                 |> withNoCmd
@@ -689,7 +694,9 @@ updateInternal doUpdate msg modelIn =
                 , url = nothingIfBlank model.editingUrl
                 }
                 False
-                model
+                { model
+                    | undoModel = Just <| modelToUndoModel model
+                }
                 |> withNoCmd
 
         ChangeEditingSrc ->
@@ -724,6 +731,7 @@ updateInternal doUpdate msg modelIn =
                         | sources = newSources
                         , lastSources = src :: model.lastSources |> uniqueifyList
                         , srcIdx = idx
+                        , undoModel = Just <| modelToUndoModel model
                     }
                         |> setEditingFields idx newSource
                         |> withNoCmd
@@ -748,6 +756,7 @@ updateInternal doUpdate msg modelIn =
                             { model
                                 | sources = newSources
                                 , srcIdx = newIdx
+                                , undoModel = Just <| modelToUndoModel model
                             }
                     in
                     mdl
@@ -764,7 +773,9 @@ updateInternal doUpdate msg modelIn =
                     model |> withNoCmd
 
                 Just source ->
-                    model
+                    { model
+                        | undoModel = Just <| modelToUndoModel model
+                    }
                         |> setEditingFields idx source
                         |> withNoCmd
 
@@ -784,11 +795,12 @@ updateInternal doUpdate msg modelIn =
                         { model
                             | sources = newSources
                             , srcIdx = newIdx
+                            , undoModel = Just <| modelToUndoModel model
                         }
                 in
                 case LE.getAt newIdx newSources of
                     Nothing ->
-                        mdl |> withNoCmd
+                        model |> withNoCmd
 
                     Just source ->
                         setEditingFields newIdx source mdl
@@ -837,10 +849,9 @@ updateInternal doUpdate msg modelIn =
                     insertInList idx panel model.sourcePanels
             in
             { model
-                | sourcePanels =
-                    panels
-                , sourcePanelIdx =
-                    newIdx
+                | sourcePanels = panels
+                , sourcePanelIdx = newIdx
+                , undoModel = Just <| modelToUndoModel model
             }
                 |> withCmd (focusInput ids.sourcePanelName)
 
@@ -854,6 +865,7 @@ updateInternal doUpdate msg modelIn =
                         { model
                             | sources = panel.panels
                             , srcIdx = 0
+                            , undoModel = Just <| modelToUndoModel model
                         }
                             |> initializeEditingFields
                             |> withNoCmd
@@ -864,6 +876,7 @@ updateInternal doUpdate msg modelIn =
                                 LE.setAt model.sourcePanelIdx
                                     { panel | panels = model.sources }
                                     model.sourcePanels
+                            , undoModel = Just <| modelToUndoModel model
                         }
                             |> withNoCmd
 
@@ -872,6 +885,7 @@ updateInternal doUpdate msg modelIn =
                 | sourcePanels =
                     LE.removeAt model.sourcePanelIdx model.sourcePanels
                 , sourcePanelIdx = -1
+                , undoModel = Just <| modelToUndoModel model
             }
                 |> withNoCmd
 
@@ -916,6 +930,7 @@ updateInternal doUpdate msg modelIn =
                             { model
                                 | sourcePanels = newSourcePanels
                                 , sourcePanelIdx = newIdx
+                                , undoModel = Just <| modelToUndoModel model
                             }
                                 |> withNoCmd
 
@@ -948,6 +963,23 @@ updateInternal doUpdate msg modelIn =
             { model | copyTo = labelCopyOption option }
                 |> fixCopyFromEqualsTo True
                 |> withNoCmd
+
+        Undo ->
+            case model.undoModel of
+                Nothing ->
+                    model |> withNoCmd
+
+                Just undoModel ->
+                    let
+                        mdl =
+                            undoModelToModel undoModel model
+                    in
+                    { mdl | undoModel = Nothing }
+                        -- It could be argued that the editing fields
+                        -- should return to what they were before the
+                        -- undone command. I found this confusing
+                        |> initializeEditingFields
+                        |> withNoCmd
 
         InputClipboard s ->
             { model | clipboard = s }
@@ -1116,6 +1148,7 @@ finishCopyFromClipboard s model =
                     { model
                         | sources = sources
                         , srcIdx = 0
+                        , undoModel = Just <| modelToUndoModel model
                     }
                         |> (if isEditingCurrent model then
                                 initializeEditingFields
@@ -1150,6 +1183,7 @@ copyToPanel sources model =
                     }
                         :: panels
                 , sourcePanelIdx = 0
+                , undoModel = Just <| modelToUndoModel model
             }
 
         Just panel ->
@@ -1162,6 +1196,7 @@ copyToPanel sources model =
             { model
                 | sourcePanels =
                     LE.setAt idx newPanel panels
+                , undoModel = Just <| modelToUndoModel model
             }
 
 
@@ -1177,6 +1212,10 @@ copyItems model =
                     |> withCmd (clipboardRead "")
 
             Panel ->
+                let
+                    undoModel =
+                        Just <| modelToUndoModel model
+                in
                 case LE.getAt model.sourcePanelIdx model.sourcePanels of
                     Nothing ->
                         model |> withNoCmd
@@ -1190,6 +1229,7 @@ copyItems model =
                                 { model
                                     | sources = panel.panels
                                     , srcIdx = 0
+                                    , undoModel = undoModel
                                 }
                                     |> initializeEditingFields
                                     |> withNoCmd
@@ -1564,39 +1604,27 @@ centerFit =
 
 
 digitKey : String -> Model -> Model
-digitKey digit modelIn =
+digitKey digit model =
     let
-        index =
+        idx =
             case String.toInt digit of
                 Just i ->
                     i
 
                 Nothing ->
                     0
-
-        model =
-            { modelIn | lastSwapTime = modelIn.time }
-                |> maybeSwitchEditor index
     in
-    if index >= 0 && index < List.length model.sources then
-        { model | srcIdx = index }
-
-    else
-        model
+    viewImage idx model
 
 
 nextImage : Model -> Model
 nextImage model =
-    viewImage model <|
-        model.srcIdx
-            + 1
+    viewImage (model.srcIdx + 1) model
 
 
 prevImage : Model -> Model
 prevImage model =
-    viewImage model <|
-        model.srcIdx
-            - 1
+    viewImage (model.srcIdx - 1) model
 
 
 isEditingCurrent : Model -> Bool
@@ -1623,8 +1651,8 @@ isEditingCurrent model =
                                 }
 
 
-viewImage : Model -> Int -> Model
-viewImage model index =
+viewImage : Int -> Model -> Model
+viewImage index model =
     let
         sources =
             model.sources
@@ -2018,6 +2046,8 @@ viewSaveDeleteButtons model =
     p []
         [ button DeleteAll
             "Delete all"
+        , text " "
+        , enabledButton (model.undoModel /= Nothing) Undo "Undo"
         ]
 
 
