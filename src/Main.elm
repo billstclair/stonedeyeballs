@@ -2,6 +2,8 @@ port module Main exposing (main)
 
 {-| TODO:
 
+Comments in model.err, which should be output near top.
+
 Global persistence via Amazon database.
 
 -}
