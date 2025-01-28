@@ -547,8 +547,14 @@ update msg model =
                     True
 
         undoneModel =
-            if False && doUpdate && msg /= Undo then
-                { model | undoModel = Nothing }
+            if doUpdate && msg /= Undo then
+                { model
+                    | err = Nothing
+                    , undoModel = Nothing
+                }
+
+            else if doUpdate then
+                { model | err = Nothing }
 
             else
                 model
@@ -1924,8 +1930,18 @@ viewInternal model =
             ]
             [ text <| name ++ " (" ++ urlType url ++ ")" ]
         , Lazy.lazy2 viewSourceLinks index model.sources
-        , p []
-            [ let
+        , p
+            []
+            [ case model.err of
+                Nothing ->
+                    text ""
+
+                Just err ->
+                    span [ style "color" "red" ]
+                        [ text err
+                        , br
+                        ]
+            , let
                 keys =
                     if model.isFocused then
                         "arrows"
