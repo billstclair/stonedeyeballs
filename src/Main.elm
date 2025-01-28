@@ -1755,18 +1755,16 @@ getLabelFromFileName filename =
 
         name =
             SE.rightOfBack "/" noType
-
-        res =
-            (if name == "" then
-                noType
-
-             else
-                name
-            )
-                |> String.replace "-" " "
-                |> String.replace "_" " "
     in
-    SE.toTitleCase res
+    (if name == "" then
+        noType
+
+     else
+        name
+    )
+        |> String.replace "-" " "
+        |> String.replace "_" " "
+        |> SE.toTitleCase
 
 
 center : List (Attribute msg) -> List (Html msg) -> Html msg
@@ -1830,6 +1828,17 @@ focusTrackingInput attributes elements =
         elements
 
 
+noPointerEvents : Attribute msg
+noPointerEvents =
+    style "pointer-events" "none"
+
+
+embedDiv : List (Attribute Msg) -> List (Html Msg) -> Html Msg
+embedDiv attributes elements =
+    div [ onClick MouseDown ]
+        [ embed (noPointerEvents :: attributes) elements ]
+
+
 viewInternal : Model -> Html Msg
 viewInternal model =
     let
@@ -1885,7 +1894,7 @@ viewInternal model =
             img
 
            else
-            embed
+            embedDiv
           )
             ([ [ src modelSrc
                , style "text-align" "center"
