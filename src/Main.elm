@@ -1757,12 +1757,14 @@ getLabelFromFileName filename =
             SE.rightOfBack "/" noType
 
         res =
-            String.replace "-" " " <|
-                if name == "" then
-                    noType
+            (if name == "" then
+                noType
 
-                else
-                    name
+             else
+                name
+            )
+                |> String.replace "-" " "
+                |> String.replace "_" " "
     in
     SE.toTitleCase res
 
