@@ -196,11 +196,10 @@ type alias SavedModel =
     }
 
 
-saveModel : Model -> Cmd Msg
-saveModel model =
+saveSavedModel : SavedModel -> Cmd Msg
+saveSavedModel savedModel =
     put "model"
-        (modelToSavedModel model
-            --|> Debug.log "  SavedModel"
+        (savedModel
             |> encodeSavedModel
             |> Just
         )
@@ -528,6 +527,12 @@ update msg model =
     let
         doUpdate =
             case msg of
+                Noop ->
+                    False
+
+                Focus _ ->
+                    False
+
                 ReceiveTime _ ->
                     False
 
@@ -543,38 +548,72 @@ update msg model =
                 SetVisible _ ->
                     False
 
+                SequenceCmds _ ->
+                    False
+
                 _ ->
                     True
 
-        undoneModel =
-            if doUpdate && msg /= Undo then
-                { model
-                    | err = Nothing
-                    , undoModel = Nothing
-                }
+        partOfCommandZ =
+            case msg of
+                OnKeyPress isDown key ->
+                    not isDown
+                        || (keyIsCommand key
+                                || (keyIsCommand model.lastKey && key == "z")
+                           )
 
-            else if doUpdate then
+                _ ->
+                    False
+
+        notUndo =
+            msg /= Undo && not partOfCommandZ
+
+        noErrModel =
+            if doUpdate then
                 { model | err = Nothing }
 
             else
                 model
+
+        undoneModel =
+            if doUpdate && notUndo then
+                { noErrModel | undoModel = Nothing }
+
+            else
+                noErrModel
 
         ( mdl, cmd ) =
             updateInternal doUpdate
                 msg
                 undoneModel
     in
-    if doUpdate && mdl.started == Started && mdl /= model then
+    if doUpdate && mdl.started == Started then
         let
-            m =
-                Debug.log "update, msg" msg
+            savedMdl =
+                modelToSavedModel mdl
+
+            savedModel =
+                modelToSavedModel model
         in
-        mdl
-            |> withCmds
-                [ cmd, saveModel mdl ]
+        if savedMdl == savedModel then
+            mdl |> withCmd cmd
+
+        else
+            let
+                m =
+                    Debug.log "update, msg" msg
+            in
+            mdl
+                |> withCmds
+                    [ cmd, saveSavedModel savedMdl ]
 
     else
         mdl |> withCmd cmd
+
+
+keyIsCommand : String -> Bool
+keyIsCommand key =
+    key == "Control" || key == "Meta"
 
 
 updateInternal : Bool -> Msg -> Model -> ( Model, Cmd Msg )
@@ -649,7 +688,7 @@ updateInternal doUpdate msg modelIn =
 
                 lastKeyWasCommand =
                     not model.isFocused
-                        && (lastKey == "Control" || lastKey == "Meta")
+                        && keyIsCommand lastKey
             in
             if not isDown then
                 { mdl | lastKey = "" } |> withNoCmd
@@ -769,9 +808,10 @@ updateInternal doUpdate msg modelIn =
                     in
                     { model
                         | sources = newSources
-                        , lastSources = src :: model.lastSources |> uniqueifyList
+                        , lastSources = (src :: model.lastSources) |> uniqueifyList
                         , srcIdx = idx
                         , undoModel = Just <| modelToUndoModel model
+                        , err = Just msgs.changeSource
                     }
                         |> setEditingFields idx newSource
                         |> withNoCmd
@@ -797,6 +837,7 @@ updateInternal doUpdate msg modelIn =
                                 | sources = newSources
                                 , srcIdx = newIdx
                                 , undoModel = Just <| modelToUndoModel model
+                                , err = Just msgs.moveSource
                             }
                     in
                     mdl
@@ -815,6 +856,7 @@ updateInternal doUpdate msg modelIn =
                 Just source ->
                     { model
                         | undoModel = Just <| modelToUndoModel model
+                        , err = Just msgs.lookupSource
                     }
                         |> setEditingFields idx source
                         |> withNoCmd
@@ -836,6 +878,7 @@ updateInternal doUpdate msg modelIn =
                             | sources = newSources
                             , srcIdx = newIdx
                             , undoModel = Just <| modelToUndoModel model
+                            , err = Just msgs.deleteSource
                         }
                 in
                 case LE.getAt newIdx newSources of
@@ -892,6 +935,7 @@ updateInternal doUpdate msg modelIn =
                 | sourcePanels = panels
                 , sourcePanelIdx = newIdx
                 , undoModel = Just <| modelToUndoModel model
+                , err = Just msgs.addSourcePanel
             }
                 |> withCmd (focusInput ids.sourcePanelName)
 
@@ -906,6 +950,7 @@ updateInternal doUpdate msg modelIn =
                             | sources = panel.panels
                             , srcIdx = 0
                             , undoModel = Just <| modelToUndoModel model
+                            , err = Just msgs.saveSourcePanel
                         }
                             |> initializeEditingFields
                             |> withNoCmd
@@ -917,6 +962,7 @@ updateInternal doUpdate msg modelIn =
                                     { panel | panels = model.sources }
                                     model.sourcePanels
                             , undoModel = Just <| modelToUndoModel model
+                            , err = Just msgs.restoreSourcePanel
                         }
                             |> withNoCmd
 
@@ -926,6 +972,7 @@ updateInternal doUpdate msg modelIn =
                     LE.removeAt model.sourcePanelIdx model.sourcePanels
                 , sourcePanelIdx = -1
                 , undoModel = Just <| modelToUndoModel model
+                , err = Just msgs.deleteSourcePanel
             }
                 |> withNoCmd
 
@@ -971,6 +1018,7 @@ updateInternal doUpdate msg modelIn =
                                 | sourcePanels = newSourcePanels
                                 , sourcePanelIdx = newIdx
                                 , undoModel = Just <| modelToUndoModel model
+                                , err = Just msgs.moveSourcePanel
                             }
                                 |> withNoCmd
 
@@ -1022,7 +1070,6 @@ updateInternal doUpdate msg modelIn =
         ClipboardContents s ->
             { model | clipboard = s }
                 |> finishCopyFromClipboard s
-                |> withNoCmd
 
         WriteClipboard ->
             { model | clipboard = "" }
@@ -1084,7 +1131,10 @@ updateInternal doUpdate msg modelIn =
                                     model
                                         |> maybeAddNewSources indexStrings
                     in
-                    { mdl | defaultSources = indexSources }
+                    { mdl
+                        | defaultSources = indexSources
+                        , lastSources = List.map .src mdl.sources |> uniqueifyList
+                    }
                         |> withNoCmd
 
         Process value ->
@@ -1176,27 +1226,29 @@ fixCopyFromEqualsTo setCopyFrom model =
             { model | copyTo = newOption }
 
 
-finishCopyFromClipboard : String -> Model -> Model
+finishCopyFromClipboard : String -> Model -> ( Model, Cmd Msg )
 finishCopyFromClipboard s model =
     case JD.decodeString (JD.list sourceDecoder) s of
         Err _ ->
             case model.copyTo of
                 Live ->
                     addSource (Just <| model.srcIdx + 1) (srcSource s) True model
+                        |> withNoCmd
 
                 _ ->
-                    model
+                    model |> withNoCmd
 
         Ok sources ->
             case model.copyTo of
                 Clipboard ->
-                    model
+                    model |> withNoCmd
 
                 Live ->
                     { model
                         | sources = sources
                         , srcIdx = 0
                         , undoModel = Just <| modelToUndoModel model
+                        , err = Just msgs.copyClipboardToLive
                     }
                         |> (if isEditingCurrent model then
                                 initializeEditingFields
@@ -1204,13 +1256,14 @@ finishCopyFromClipboard s model =
                             else
                                 identity
                            )
+                        |> withNoCmd
 
                 Panel ->
-                    copyToPanel sources model
+                    copyToPanel (copyOptionLabel Live) sources model
 
 
-copyToPanel : List Source -> Model -> Model
-copyToPanel sources model =
+copyToPanel : String -> List Source -> Model -> ( Model, Cmd Msg )
+copyToPanel fromName sources model =
     let
         idx =
             model.sourcePanelIdx
@@ -1232,7 +1285,9 @@ copyToPanel sources model =
                         :: panels
                 , sourcePanelIdx = 0
                 , undoModel = Just <| modelToUndoModel model
+                , err = Just <| msgs.addSourcePanel ++ " from " ++ fromName
             }
+                |> withCmd (focusInput ids.sourcePanelName)
 
         Just panel ->
             let
@@ -1245,7 +1300,9 @@ copyToPanel sources model =
                 | sourcePanels =
                     LE.setAt idx newPanel panels
                 , undoModel = Just <| modelToUndoModel model
+                , err = Just <| msgs.overwriteSourcePanel ++ " from " ++ fromName
             }
+                |> withCmd (focusInput ids.sourcePanelName)
 
 
 copyItems : Model -> ( Model, Cmd Msg )
@@ -1278,6 +1335,11 @@ copyItems model =
                                     | sources = panel.panels
                                     , srcIdx = 0
                                     , undoModel = undoModel
+                                    , err =
+                                        Just <|
+                                            msgs.copyPanel
+                                                ++ " to "
+                                                ++ copyOptionLabel Live
                                 }
                                     |> initializeEditingFields
                                     |> withNoCmd
@@ -1287,7 +1349,13 @@ copyItems model =
                                     json =
                                         JE.list encodeSource panel.panels
                                 in
-                                model
+                                { model
+                                    | err =
+                                        Just <|
+                                            msgs.copyPanel
+                                                ++ " to "
+                                                ++ copyOptionLabel Clipboard
+                                }
                                     |> withCmd (clipboardWrite <| JE.encode 0 json)
 
             Live ->
@@ -1300,12 +1368,17 @@ copyItems model =
                             json =
                                 JE.list encodeSource model.sources
                         in
-                        model
+                        { model
+                            | err =
+                                Just <|
+                                    msgs.copyLive
+                                        ++ " to "
+                                        ++ copyOptionLabel Clipboard
+                        }
                             |> withCmd (clipboardWrite <| JE.encode 0 json)
 
                     Panel ->
-                        copyToPanel model.sources model
-                            |> withNoCmd
+                        copyToPanel (copyOptionLabel Live) model.sources model
 
 
 uniqueifyList : List a -> List a
@@ -1364,8 +1437,10 @@ addSource maybeIdx source updateEditor model =
     in
     { model
         | sources = newSources
+        , lastSources = (source.src :: model.lastSources) |> uniqueifyList
         , srcIdx = srcIdx
         , undoModel = Just <| modelToUndoModel model
+        , err = Just msgs.addSource
     }
         |> (if editorChanged then
                 initializeEditingFields
@@ -1438,10 +1513,20 @@ maybeAddNewSources indexStrings model =
             newSources =
                 Debug.log "maybeAddNewSource, newsources" <|
                     AS.toList newSourcesSet
+
+            err =
+                if newSources == [] then
+                    Nothing
+
+                else
+                    Just <|
+                        msgs.addNewSources
+                            ++ ": "
+                            ++ String.fromInt (List.length newSources)
         in
         { model
             | sources = model.sources ++ List.map srcSource newSources
-            , lastSources = model.lastSources ++ newSources
+            , err = err
         }
 
 
@@ -1845,6 +1930,27 @@ embedDiv attributes elements =
         [ embed (noPointerEvents :: attributes) elements ]
 
 
+{-| These are values for `Model.err`
+-}
+msgs =
+    { addSource = "Added new image"
+    , changeSource = "Changed image"
+    , moveSource = "Moved image"
+    , lookupSource = "Updated editor from Live"
+    , deleteSource = "Deleted image"
+    , addSourcePanel = "Added Source Panel"
+    , saveSourcePanel = "Source Panel made live"
+    , restoreSourcePanel = "Overwrote Source Panel"
+    , deleteSourcePanel = "Deleted Source Panel"
+    , moveSourcePanel = "Moved Source Panel"
+    , copyClipboardToLive = "Copied Clipboard to Live"
+    , overwriteSourcePanel = "Overwrote Source Panel"
+    , copyPanel = "Copied Source Panel"
+    , copyLive = "Copied Live"
+    , addNewSources = "Added new sources"
+    }
+
+
 viewInternal : Model -> Html Msg
 viewInternal model =
     let
@@ -2216,7 +2322,7 @@ viewCopyButtons model =
 
 isPanelSelectable : Model -> Bool
 isPanelSelectable model =
-    (model.sourcePanelIdx > 0)
+    (model.sourcePanelIdx >= 0)
         && (model.sourcePanelIdx < List.length model.sourcePanels)
 
 
