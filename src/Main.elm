@@ -13,7 +13,7 @@ import Browser.Events as Events exposing (Visibility(..))
 import Browser.Navigation as Navigation exposing (Key)
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
-import Html exposing (Attribute, Html, a, div, embed, hr, img, input, option, p, select, span, table, td, text, textarea, th, tr)
+import Html exposing (Attribute, Html, a, div, embed, hr, img, input, option, p, select, span, table, text, textarea, tr)
 import Html.Attributes as Attributes exposing (checked, class, colspan, disabled, height, href, property, selected, src, style, target, title, type_, value, width)
 import Html.Events exposing (on, onBlur, onClick, onFocus, onInput, targetValue)
 import Html.Lazy as Lazy
@@ -1968,6 +1968,85 @@ msgs =
     }
 
 
+viewSrc : String -> Maybe String -> Html Msg
+viewSrc url maybeMaxHeight =
+    let
+        fileUrlType =
+            urlType url
+
+        isImage =
+            List.member fileUrlType imgTypes
+
+        ( maxHeight, isMaxHeight ) =
+            case maybeMaxHeight of
+                Nothing ->
+                    ( "", False )
+
+                Just mh ->
+                    ( mh, True )
+    in
+    (if isImage then
+        img
+
+     else
+        embedDiv
+    )
+        (List.concat
+            [ [ src url
+              , style "text-align" "center"
+              , onClick MouseDown
+              , if not isImage && isMaxHeight then
+                    style "height" "max-content"
+
+                else
+                    style "" ""
+              , style "max-height" <|
+                    if isMaxHeight then
+                        maxHeight
+
+                    else
+                        "500px"
+              ]
+            , if isImage && not isMaxHeight then
+                centerFit
+
+              else
+                []
+            ]
+        )
+        []
+
+
+computeImgSrc : Maybe Source -> Int -> ( String, String )
+computeImgSrc maybeSource idx =
+    case maybeSource of
+        Just source ->
+            let
+                src =
+                    if String.startsWith "http" source.src then
+                        source.src
+
+                    else
+                        "images/" ++ source.src
+
+                url =
+                    case source.url of
+                        Nothing ->
+                            src
+
+                        Just u ->
+                            if u == "" then
+                                src
+
+                            else
+                                u
+            in
+            ( src, url )
+
+        Nothing ->
+            ( String.fromInt idx, "" )
+
+
 viewInternal : Model -> Html Msg
 viewInternal model =
     let
@@ -1977,40 +2056,11 @@ viewInternal model =
         index =
             model.srcIdx
 
-        modelSrc =
-            case LE.getAt index model.sources of
-                Just s ->
-                    if String.startsWith "http" s.src then
-                        s.src
+        maybeSource =
+            LE.getAt index model.sources
 
-                    else
-                        "images/" ++ s.src
-
-                Nothing ->
-                    String.fromInt model.srcIdx
-
-        url =
-            case LE.getAt index model.sources of
-                Just source ->
-                    case source.url of
-                        Nothing ->
-                            modelSrc
-
-                        Just u ->
-                            if u == "" then
-                                modelSrc
-
-                            else
-                                u
-
-                Nothing ->
-                    modelSrc
-
-        fileUrlType =
-            urlType modelSrc
-
-        isImage =
-            List.member fileUrlType imgTypes
+        ( modelSrc, url ) =
+            computeImgSrc maybeSource model.srcIdx
     in
     div
         [ style "text-align" "center"
@@ -2019,31 +2069,7 @@ viewInternal model =
         , style "overflow" "auto"
         ]
         [ text "" --h2 "Stoned Eyeballs"
-        , (if isImage then
-            img
-
-           else
-            embedDiv
-          )
-            ([ [ src modelSrc
-               , style "text-align" "center"
-               , onClick MouseDown
-               , if not isImage then
-                    style "height" "max-content"
-
-                 else
-                    style "" ""
-               , style "max-height" "500px"
-               ]
-             , if isImage then
-                centerFit
-
-               else
-                []
-             ]
-                |> List.concat
-            )
-            []
+        , viewSrc modelSrc Nothing
         , br
         , text (String.fromInt index)
         , text ": "
@@ -2424,6 +2450,11 @@ th s =
     Html.th [] [ text s ]
 
 
+td : String -> Html msg
+td s =
+    Html.td [] [ text s ]
+
+
 caselessContains : String -> String -> Bool
 caselessContains search string =
     let
@@ -2479,57 +2510,63 @@ viewSearch model =
                 [ text model.searchString ]
             ]
         , let
-            sources =
+            indexedSources =
                 List.filter
-                    (matchesSearchString model.searchString)
-                    model.sources
+                    (\( _, source ) -> matchesSearchString model.searchString source)
+                    (List.indexedMap Tuple.pair model.sources)
 
             cnt =
                 10
 
             panels =
-                List.take cnt sources
+                List.take cnt indexedSources
 
-            showSource { src, label, url } =
-                tr []
-                    [ td [] [ text src ]
-                    , td []
-                        [ text <|
-                            case label of
-                                Nothing ->
-                                    getLabelFromFileName src
-
-                                Just lab ->
-                                    lab
+            showSource : ( Int, Source ) -> Html Msg
+            showSource ( idx, source ) =
+                tr [ onClick <| SetSrcIdx <| String.fromInt idx ]
+                    [ td <| String.fromInt idx
+                    , Html.td [ style "text-align" "center" ]
+                        [ viewSrc
+                            (computeImgSrc (Just source) idx |> Tuple.first)
+                          <|
+                            Just "2em"
                         ]
-                    , td []
-                        [ text <|
-                            case url of
-                                Nothing ->
-                                    ""
+                    , td source.src
+                    , td <|
+                        case source.label of
+                            Nothing ->
+                                getLabelFromFileName source.src
 
-                                Just u ->
-                                    u
-                        ]
+                            Just lab ->
+                                lab
+                    , td <|
+                        case source.url of
+                            Nothing ->
+                                ""
+
+                            Just u ->
+                                u
                     ]
           in
           p []
             [ table [ class "prettyTable" ] <|
                 List.concat
                     [ [ tr []
-                            [ th "src"
+                            [ th "idx"
+                            , th "image"
+                            , th "src"
                             , th "label"
                             , th "url"
                             ]
                       ]
                     , List.map showSource panels
-                    , [ if cnt >= List.length sources then
+                    , [ if cnt >= List.length indexedSources then
                             text ""
 
                         else
                             tr
                                 [ style "align" "left" ]
-                                [ Html.td [ colspan 3 ]
+                                [ Html.td [ colspan 5 ]
                                     [ text "..." ]
                                 ]
                       ]
@@ -2600,7 +2637,7 @@ viewSourcePanel model idx panel =
                 , enabledButton (not isFirst) (MoveSourcePanelUp True) "^"
                 , enabledButton (not isLast) (MoveSourcePanelUp False) "v"
                 ]
-        , td [ onClick <| SelectSourcePanel idx ] <|
+        , Html.td [ onClick <| SelectSourcePanel idx ] <|
             let
                 sourcesCnt =
                     List.length sources
