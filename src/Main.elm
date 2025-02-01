@@ -2457,18 +2457,7 @@ td s =
 
 caselessContains : String -> String -> Bool
 caselessContains search string =
-    let
-        lcSearch =
-            String.toLower search
-
-        lcString =
-            String.toLower string
-    in
-    if search == lcSearch then
-        String.contains lcSearch lcString
-
-    else
-        String.contains search string
+    String.contains (String.toLower search) <| String.toLower string
 
 
 matchesSearchString : String -> Source -> Bool
