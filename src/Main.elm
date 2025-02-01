@@ -16,7 +16,7 @@ import Browser.Navigation as Navigation exposing (Key)
 import Cmd.Extra exposing (addCmd, withCmd, withCmds, withNoCmd)
 import Dict exposing (Dict)
 import Html exposing (Attribute, Html, a, div, embed, hr, img, input, option, p, select, span, table, td, text, textarea, th, tr)
-import Html.Attributes as Attributes exposing (checked, class, disabled, height, href, property, selected, src, style, target, title, type_, value, width)
+import Html.Attributes as Attributes exposing (checked, class, colspan, disabled, height, href, property, selected, src, style, target, title, type_, value, width)
 import Html.Events exposing (on, onBlur, onClick, onFocus, onInput, targetValue)
 import Html.Lazy as Lazy
 import Http
@@ -113,6 +113,7 @@ type alias Model =
     , showEditingSources : Bool
     , showHelp : Bool
     , mergeEditingSources : Bool
+    , showSearch : Bool
 
     -- Non-persistent below here
     , err : Maybe String
@@ -193,6 +194,7 @@ type alias SavedModel =
     , showEditingSources : Bool
     , showHelp : Bool
     , mergeEditingSources : Bool
+    , showSearch : Bool
     }
 
 
@@ -217,6 +219,7 @@ modelToSavedModel model =
     , showEditingSources = model.showEditingSources
     , showHelp = model.showHelp
     , mergeEditingSources = model.mergeEditingSources
+    , showSearch = model.showSearch
     }
 
 
@@ -233,6 +236,7 @@ savedModelToModel savedModel model =
         , showEditingSources = savedModel.showEditingSources
         , showHelp = savedModel.showHelp
         , mergeEditingSources = savedModel.mergeEditingSources
+        , showSearch = savedModel.showSearch
     }
 
 
@@ -271,6 +275,7 @@ savedModelDecoder =
         |> optional "showEditingSources" JD.bool True
         |> optional "showHelp" JD.bool True
         |> optional "mergeEditingSources" JD.bool True
+        |> optional "showSearch" JD.bool False
 
 
 sourcePanelDecoder : Decoder SourcePanel
@@ -351,6 +356,7 @@ encodeSavedModel savedModel =
         , ( "showEditingSources", JE.bool savedModel.showEditingSources )
         , ( "showHelp", JE.bool savedModel.showHelp )
         , ( "mergeEditingSources", JE.bool savedModel.mergeEditingSources )
+        , ( "showSearch", JE.bool savedModel.showSearch )
         ]
 
 
@@ -381,6 +387,7 @@ init =
       , showEditingSources = True
       , showHelp = True
       , mergeEditingSources = True
+      , showSearch = False
 
       -- non-persistent below here
       , err = Nothing
@@ -479,6 +486,7 @@ type Msg
     | ToggleShowEditingSources
     | ToggleShowHelp
     | ToggleMergeEditingSources
+    | ToggleShowSearch
     | DeleteAll
     | AddEditingSrc
     | ChangeEditingSrc
@@ -751,6 +759,10 @@ updateInternal doUpdate msg modelIn =
 
         ToggleMergeEditingSources ->
             { model | mergeEditingSources = not model.mergeEditingSources }
+                |> withNoCmd
+
+        ToggleShowSearch ->
+            { model | showSearch = not model.showSearch }
                 |> withNoCmd
 
         DeleteAll ->
@@ -2215,7 +2227,19 @@ viewControls model =
                 ]
             , viewCopyButtons model
             , viewEditingSources model
-            , viewSourcePanels model
+            , p []
+                [ button ToggleShowSearch <|
+                    if model.showSearch then
+                        "Show Source Panels"
+
+                    else
+                        "Show Search"
+                ]
+            , if model.showSearch then
+                viewSearch model
+
+              else
+                viewSourcePanels model
             , viewClipboardTest model
             , p []
                 [ if model.reallyDeleteState then
@@ -2390,6 +2414,70 @@ viewEditingSources model =
         ]
 
 
+th : String -> Html msg
+th s =
+    Html.th [] [ text s ]
+
+
+viewSearch : Model -> Html Msg
+viewSearch model =
+    span []
+        [ h3 "Search"
+        , let
+            cnt =
+                10
+
+            panels =
+                List.take cnt model.sources
+
+            showSource { src, label, url } =
+                tr []
+                    [ td [] [ text src ]
+                    , td []
+                        [ text <|
+                            case label of
+                                Nothing ->
+                                    getLabelFromFileName src
+
+                                Just lab ->
+                                    lab
+                        ]
+                    , td []
+                        [ text <|
+                            case url of
+                                Nothing ->
+                                    ""
+
+                                Just u ->
+                                    u
+                        ]
+                    ]
+          in
+          p []
+            [ table [ class "prettyTable" ] <|
+                List.concat
+                    [ [ tr []
+                            [ th "src"
+                            , th "label"
+                            , th "url"
+                            ]
+                      ]
+                    , List.map showSource panels
+                    , [ if cnt >= List.length model.sources then
+                            text ""
+
+                        else
+                            tr
+                                [ style "align" "left" ]
+                                [ Html.td [ colspan 3 ]
+                                    [ text "..." ]
+                                ]
+                      ]
+                    ]
+            ]
+        ]
+
+
 viewSourcePanels : Model -> Html Msg
 viewSourcePanels model =
     span []
@@ -2419,7 +2507,7 @@ viewSourcePanel model idx panel =
     in
     tr []
         [ if not isEditing then
-            th [ onClick <| SelectSourcePanel idx ]
+            Html.th [ onClick <| SelectSourcePanel idx ]
                 [ text panel.name ]
 
           else
@@ -2430,7 +2518,7 @@ viewSourcePanel model idx panel =
                 isLast =
                     model.sourcePanelIdx == List.length model.sourcePanels - 1
             in
-            th [ style "text-align" "left" ]
+            Html.th [ style "text-align" "left" ]
                 [ focusTrackingInput
                     [ onInput InputEditingPanelName
                     , value panel.name
