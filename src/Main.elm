@@ -130,6 +130,7 @@ type alias Model =
     , copyTo : CopyOption
     , undoModel : Maybe UndoModel
     , searchString : String
+    , searchCnt : Int
     , lastKey : String
     , isFocused : Bool
     , clipboard : String
@@ -405,6 +406,7 @@ init =
       , copyTo = Clipboard
       , undoModel = Nothing
       , searchString = ""
+      , searchCnt = 10
       , lastKey = ""
       , isFocused = False
       , clipboard = ""
@@ -508,6 +510,7 @@ type Msg
     | SetCopyTo String
     | Undo
     | InputSearchString String
+    | SearchMore Bool
     | Focus Bool
     | InputClipboard String
     | ReadClipboard
@@ -733,6 +736,35 @@ updateInternal doUpdate msg modelIn =
 
         InputSwitchPeriod string ->
             { model | switchPeriod = string }
+                |> withNoCmd
+
+        SearchMore morep ->
+            let
+                searchCnt =
+                    model.searchCnt
+
+                newCnt =
+                    Debug.log "SearchMore, newCnt" <|
+                        if morep then
+                            if searchCnt < 50 then
+                                50
+
+                            else if searchCnt == 50 then
+                                100
+
+                            else
+                                searchCnt + 100
+
+                        else if searchCnt > 100 then
+                            searchCnt - 100
+
+                        else if searchCnt > 50 then
+                            50
+
+                        else
+                            10
+            in
+            { model | searchCnt = newCnt }
                 |> withNoCmd
 
         ToggleSwitchEnabled ->
@@ -2267,7 +2299,10 @@ viewControls model =
                         "Show Search"
                 ]
             , if model.showSearch then
-                viewSearch model
+                Lazy.lazy3 viewSearch
+                    model.searchCnt
+                    model.searchString
+                    model.sources
 
               else
                 viewSourcePanels model
@@ -2484,31 +2519,31 @@ matchesSearchString string { src, label, url } =
         || caselessContains string url2
 
 
-viewSearch : Model -> Html Msg
-viewSearch model =
+viewSearch : Int -> String -> List Source -> Html Msg
+viewSearch searchCnt searchString sources =
     span []
         [ h3 "Search"
         , p []
             [ b "Search for: "
             , focusTrackingInput
                 [ onInput InputSearchString
-                , value model.searchString
+                , value searchString
                 , width 20
                 , style "min-width" "20em"
                 ]
-                [ text model.searchString ]
+                [ text searchString ]
             ]
         , let
-            indexedSources =
+            matchedPairs =
                 List.filter
-                    (\( _, source ) -> matchesSearchString model.searchString source)
-                    (List.indexedMap Tuple.pair model.sources)
+                    (\( _, source ) -> matchesSearchString searchString source)
+                    (List.indexedMap Tuple.pair sources)
 
-            cnt =
-                10
+            matchCnt =
+                List.length matchedPairs
 
             panels =
-                List.take cnt indexedSources
+                List.take (Debug.log "viewSearch, searchCnt" searchCnt) matchedPairs
 
             showSource : ( Int, Source ) -> Html Msg
             showSource ( idx, source ) =
@@ -2549,15 +2584,24 @@ viewSearch model =
                             ]
                       ]
                     , List.map showSource panels
-                    , [ if cnt >= List.length indexedSources then
-                            text ""
-
-                        else
-                            tr
-                                [ style "align" "left" ]
-                                [ Html.td [ colspan 5 ]
-                                    [ text "..." ]
+                    , [ tr
+                            [ style "align" "left" ]
+                            [ Html.td [ colspan 5 ]
+                                [ enabledButton
+                                    (searchCnt < matchCnt)
+                                    (SearchMore True)
+                                    "More"
+                                , text " "
+                                , enabledButton (searchCnt > 10)
+                                    (SearchMore False)
+                                    "Less"
+                                , text " (showing "
+                                , text <| String.fromInt (min searchCnt matchCnt)
+                                , text " of "
+                                , text <| String.fromInt matchCnt
+                                , text " matches)"
                                 ]
+                            ]
                       ]
                     ]
             ]
