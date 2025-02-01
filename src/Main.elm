@@ -744,25 +744,24 @@ updateInternal doUpdate msg modelIn =
                     model.searchCnt
 
                 newCnt =
-                    Debug.log "SearchMore, newCnt" <|
-                        if morep then
-                            if searchCnt < 50 then
-                                50
-
-                            else if searchCnt == 50 then
-                                100
-
-                            else
-                                searchCnt + 100
-
-                        else if searchCnt > 100 then
-                            searchCnt - 100
-
-                        else if searchCnt > 50 then
+                    if morep then
+                        if searchCnt < 50 then
                             50
 
+                        else if searchCnt == 50 then
+                            100
+
                         else
-                            10
+                            searchCnt + 100
+
+                    else if searchCnt > 100 then
+                        searchCnt - 100
+
+                    else if searchCnt > 50 then
+                        50
+
+                    else
+                        10
             in
             { model | searchCnt = newCnt }
                 |> withNoCmd
@@ -2543,7 +2542,7 @@ viewSearch searchCnt searchString sources =
                 List.length matchedPairs
 
             panels =
-                List.take (Debug.log "viewSearch, searchCnt" searchCnt) matchedPairs
+                List.take searchCnt matchedPairs
 
             showSource : ( Int, Source ) -> Html Msg
             showSource ( idx, source ) =
