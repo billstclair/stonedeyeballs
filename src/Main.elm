@@ -2,8 +2,6 @@ port module Main exposing (main)
 
 {-| TODO:
 
-Comments in model.err, which should be output near top.
-
 Global persistence via Amazon database.
 
 -}
@@ -131,6 +129,7 @@ type alias Model =
     , copyFrom : CopyOption
     , copyTo : CopyOption
     , undoModel : Maybe UndoModel
+    , searchString : String
     , lastKey : String
     , isFocused : Bool
     , clipboard : String
@@ -405,6 +404,7 @@ init =
       , copyFrom = Live
       , copyTo = Clipboard
       , undoModel = Nothing
+      , searchString = ""
       , lastKey = ""
       , isFocused = False
       , clipboard = ""
@@ -507,6 +507,7 @@ type Msg
     | SetCopyFrom String
     | SetCopyTo String
     | Undo
+    | InputSearchString String
     | Focus Bool
     | InputClipboard String
     | ReadClipboard
@@ -1066,6 +1067,10 @@ updateInternal doUpdate msg modelIn =
 
         Undo ->
             undo model |> withNoCmd
+
+        InputSearchString s ->
+            { model | searchString = s }
+                |> withNoCmd
 
         Focus isFocused ->
             { model | isFocused = isFocused }
@@ -2419,16 +2424,71 @@ th s =
     Html.th [] [ text s ]
 
 
+caselessContains : String -> String -> Bool
+caselessContains search string =
+    let
+        lcSearch =
+            String.toLower search
+
+        lcString =
+            String.toLower string
+    in
+    if search == lcSearch then
+        String.contains lcSearch lcString
+
+    else
+        String.contains search string
+
+
+matchesSearchString : String -> Source -> Bool
+matchesSearchString string { src, label, url } =
+    let
+        lab =
+            case label of
+                Nothing ->
+                    getLabelFromFileName src
+
+                Just l ->
+                    l
+
+        url2 =
+            case url of
+                Nothing ->
+                    ""
+
+                Just u ->
+                    u
+    in
+    caselessContains string src
+        || caselessContains string lab
+        || caselessContains string url2
+
+
 viewSearch : Model -> Html Msg
 viewSearch model =
     span []
         [ h3 "Search"
+        , p []
+            [ b "Search for: "
+            , focusTrackingInput
+                [ onInput InputSearchString
+                , value model.searchString
+                , width 20
+                , style "min-width" "20em"
+                ]
+                [ text model.searchString ]
+            ]
         , let
+            sources =
+                List.filter
+                    (matchesSearchString model.searchString)
+                    model.sources
+
             cnt =
                 10
 
             panels =
-                List.take cnt model.sources
+                List.take cnt sources
 
             showSource { src, label, url } =
                 tr []
@@ -2463,7 +2523,7 @@ viewSearch model =
                             ]
                       ]
                     , List.map showSource panels
-                    , [ if cnt >= List.length model.sources then
+                    , [ if cnt >= List.length sources then
                             text ""
 
                         else
