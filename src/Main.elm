@@ -2001,22 +2001,14 @@ msgs =
     }
 
 
-viewSrc : String -> Maybe String -> Html Msg
-viewSrc url maybeMaxHeight =
+viewSrc : Bool -> String -> String -> String -> Html Msg
+viewSrc forTable url maxHeight maxWidth =
     let
         fileUrlType =
             urlType url
 
         isImage =
             List.member fileUrlType imgTypes
-
-        ( maxHeight, isMaxHeight ) =
-            case maybeMaxHeight of
-                Nothing ->
-                    ( "", False )
-
-                Just mh ->
-                    ( mh, True )
     in
     (if isImage then
         img
@@ -2028,19 +2020,22 @@ viewSrc url maybeMaxHeight =
             [ [ src url
               , style "text-align" "center"
               , onClick MouseDown
-              , if not isImage && isMaxHeight then
+              , if not isImage && not forTable then
                     style "height" "max-content"
 
                 else
                     style "" ""
               , style "max-height" <|
-                    if isMaxHeight then
+                    if forTable then
                         maxHeight
 
                     else
                         "500px"
               ]
-            , if isImage && not isMaxHeight then
+            , if forTable then
+                [ style "max-width" maxWidth ]
+
+              else if isImage && not forTable then
                 centerFit
 
               else
@@ -2102,7 +2097,7 @@ viewInternal model =
         , style "overflow" "auto"
         ]
         [ text "" --h2 "Stoned Eyeballs"
-        , viewSrc modelSrc Nothing
+        , viewSrc False modelSrc "" ""
         , br
         , text (String.fromInt index)
         , text ": "
@@ -2557,10 +2552,10 @@ viewSearch searchCnt searchString sources =
                 [ tr [ onClick <| setSrc idx ]
                     [ td <| String.fromInt idx
                     , Html.td [ style "text-align" "center" ]
-                        [ viewSrc
+                        [ viewSrc True
                             (computeImgSrc (Just source) idx |> Tuple.first)
-                          <|
-                            Just "2em"
+                            "2em"
+                            "4em"
                         ]
                     , td source.src
                     , td <|
