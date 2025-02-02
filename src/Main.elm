@@ -1883,6 +1883,8 @@ maybeSwitchEditor idx model =
 
                             Nothing ->
                                 getLabelFromFileName source.src
+                    , editingUrl =
+                        Maybe.withDefault "" source.url
                 }
 
 
@@ -2544,9 +2546,15 @@ viewSearch searchCnt searchString sources =
             panels =
                 List.take searchCnt matchedPairs
 
-            showSource : ( Int, Source ) -> Html Msg
+            tableColumnCnt =
+                4
+
+            setSrc idx =
+                SetSrcIdx <| String.fromInt idx
+
+            showSource : ( Int, Source ) -> List (Html Msg)
             showSource ( idx, source ) =
-                tr [ onClick <| SetSrcIdx <| String.fromInt idx ]
+                [ tr [ onClick <| setSrc idx ]
                     [ td <| String.fromInt idx
                     , Html.td [ style "text-align" "center" ]
                         [ viewSrc
@@ -2562,14 +2570,21 @@ viewSearch searchCnt searchString sources =
 
                             Just lab ->
                                 lab
-                    , td <|
-                        case source.url of
-                            Nothing ->
-                                ""
-
-                            Just u ->
-                                u
                     ]
+                , case source.url of
+                    Nothing ->
+                        text ""
+
+                    Just url ->
+                        tr [ onClick <| setSrc idx ]
+                            [ Html.td [ colspan 2 ]
+                                [ text special.nbsp ]
+                            , Html.td [ colspan <| tableColumnCnt - 2 ]
+                                [ b "url: "
+                                , text url
+                                ]
+                            ]
+                ]
           in
           p []
             [ table [ class "prettyTable" ] <|
@@ -2579,13 +2594,12 @@ viewSearch searchCnt searchString sources =
                             , th "image"
                             , th "src"
                             , th "label"
-                            , th "url"
                             ]
                       ]
-                    , List.map showSource panels
+                    , List.map showSource panels |> List.concat
                     , [ tr
                             [ style "align" "left" ]
-                            [ Html.td [ colspan 5 ]
+                            [ Html.td [ colspan tableColumnCnt ]
                                 [ enabledButton
                                     (searchCnt < matchCnt)
                                     (SearchMore True)
