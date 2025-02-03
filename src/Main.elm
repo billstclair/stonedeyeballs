@@ -2554,7 +2554,7 @@ viewSearch searchCnt searchString sources =
                     , Html.td [ style "text-align" "center" ]
                         [ viewSrc True
                             (computeImgSrc (Just source) idx |> Tuple.first)
-                            "2em"
+                            "3em"
                             "4em"
                         ]
                     , td source.src
