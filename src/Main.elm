@@ -41,6 +41,9 @@ type alias Source =
 canonicalizeSource : Source -> Source
 canonicalizeSource source =
     let
+        src =
+            urlDisplay source.src
+
         default =
             getLabelFromFileName source.src
 
@@ -64,12 +67,13 @@ canonicalizeSource source =
                 Just url ->
                     nothingIfBlank url
     in
-    if source.label == maybeLabel && source.url == maybeUrl then
+    if source.src == src && source.label == maybeLabel && source.url == maybeUrl then
         source
 
     else
         { source
-            | label = maybeLabel
+            | src = src
+            , label = maybeLabel
             , url = maybeUrl
         }
 
@@ -372,7 +376,7 @@ stonedEyeballsSource =
 
 srcSource : String -> Source
 srcSource src =
-    { src = src, label = Nothing, url = Nothing }
+    { src = urlDisplay src, label = Nothing, url = Nothing }
 
 
 init : ( Model, Cmd Msg )
@@ -813,8 +817,8 @@ updateInternal doUpdate msg modelIn =
         AddEditingSrc ->
             addSource (String.toInt model.editingIdxStr)
                 { src = model.editingSrc
-                , label = nothingIfBlank model.editingLabel
-                , url = nothingIfBlank model.editingUrl
+                , label = Just model.editingLabel
+                , url = Just model.editingUrl
                 }
                 False
                 { model
@@ -852,7 +856,9 @@ updateInternal doUpdate msg modelIn =
                     in
                     { model
                         | sources = newSources
-                        , lastSources = (src :: model.lastSources) |> uniqueifyList
+                        , lastSources =
+                            (newSource.src :: model.lastSources)
+                                |> uniqueifyList
                         , srcIdx = idx
                         , undoModel = Just <| modelToUndoModel model
                         , err = Just msgs.changeSource
@@ -1181,7 +1187,9 @@ updateInternal doUpdate msg modelIn =
                     in
                     { mdl
                         | defaultSources = indexSources
-                        , lastSources = List.map .src mdl.sources |> uniqueifyList
+                        , lastSources =
+                            List.map .src mdl.sources
+                                |> uniqueifyList
                     }
                         |> withNoCmd
 
@@ -1462,7 +1470,7 @@ setEditingFields idx source model =
     { model
         | editingIdx = idx
         , editingIdxStr = String.fromInt idx
-        , editingSrc = source.src
+        , editingSrc = urlDisplay source.src
         , editingLabel = label
         , editingUrl = Maybe.withDefault "" source.url
     }
@@ -1471,6 +1479,9 @@ setEditingFields idx source model =
 addSource : Maybe Int -> Source -> Bool -> Model -> Model
 addSource maybeIdx source updateEditor model =
     let
+        canonicalSource =
+            canonicalizeSource source
+
         sources =
             model.sources
 
@@ -1478,14 +1489,16 @@ addSource maybeIdx source updateEditor model =
             Maybe.withDefault -1 maybeIdx
 
         ( srcIdx, newSources ) =
-            insertInList idx source sources
+            insertInList idx canonicalSource sources
 
         editorChanged =
             updateEditor && isEditingCurrent model
     in
     { model
         | sources = newSources
-        , lastSources = (source.src :: model.lastSources) |> uniqueifyList
+        , lastSources =
+            (canonicalSource.src :: model.lastSources)
+                |> uniqueifyList
         , srcIdx = srcIdx
         , undoModel = Just <| modelToUndoModel model
         , err = Just msgs.addSource
@@ -1550,7 +1563,7 @@ maybeAddNewSources indexStrings model =
     else
         let
             indexStringsSet =
-                AS.fromList indexStrings
+                AS.fromList <| List.map urlDisplay indexStrings
 
             lastSourcesSet =
                 AS.fromList model.lastSources
@@ -1875,7 +1888,7 @@ maybeSwitchEditor idx model =
                 { model
                     | editingIdx = idx
                     , editingIdxStr = String.fromInt idx
-                    , editingSrc = source.src
+                    , editingSrc = urlDisplay source.src
                     , editingLabel =
                         case source.label of
                             Just label ->
@@ -1949,6 +1962,23 @@ urlType url =
                     Just res ->
                         res
            )
+
+
+imagePrefix : String
+imagePrefix =
+    "images/"
+
+
+peoplePrefix : String
+peoplePrefix =
+    "people/"
+
+
+nonPeopleFiles : List String
+nonPeopleFiles =
+    [ "stoned-eyeballs.jpg"
+    , "stoned-eyeballs-2.jpg"
+    ]
 
 
 imgTypes : List String
@@ -2045,9 +2075,46 @@ viewSrc forTable url maxHeight maxWidth =
         []
 
 
+urlDisplay : String -> String
+urlDisplay url =
+    if String.startsWith "http" url then
+        let
+            cnt =
+                if String.startsWith "https://" url then
+                    8
+
+                else if String.startsWith "http://" url then
+                    7
+
+                else
+                    0
+        in
+        String.dropLeft cnt url
+
+    else if String.startsWith peoplePrefix url then
+        String.dropLeft (String.length peoplePrefix) url
+
+    else
+        url
+
+
+{-| lastSources must contain the "people/" prefix.
+-}
+lastSourcesSrc : String -> String
+lastSourcesSrc src =
+    if String.contains "/" src then
+        src
+
+    else
+        peoplePrefix ++ src
+
+
 computeImgSrc : Maybe Source -> Int -> ( String, String )
 computeImgSrc maybeSource idx =
     case maybeSource of
+        Nothing ->
+            ( String.fromInt idx, "" )
+
         Just source ->
             let
                 src =
@@ -2055,7 +2122,24 @@ computeImgSrc maybeSource idx =
                         source.src
 
                     else
-                        "images/" ++ source.src
+                        let
+                            prefix =
+                                if List.member source.src nonPeopleFiles then
+                                    imagePrefix
+
+                                else if
+                                    String.startsWith peoplePrefix
+                                        source.src
+                                then
+                                    imagePrefix
+
+                                else if String.contains "/" source.src then
+                                    "https://"
+
+                                else
+                                    imagePrefix ++ peoplePrefix
+                        in
+                        prefix ++ source.src
 
                 url =
                     case source.url of
@@ -2070,9 +2154,6 @@ computeImgSrc maybeSource idx =
                                 u
             in
             ( src, url )
-
-        Nothing ->
-            ( String.fromInt idx, "" )
 
 
 viewInternal : Model -> Html Msg
@@ -2557,7 +2638,7 @@ viewSearch searchCnt searchString sources =
                             "3em"
                             "4em"
                         ]
-                    , td source.src
+                    , td <| urlDisplay source.src
                     , td <|
                         case source.label of
                             Nothing ->
@@ -2846,12 +2927,7 @@ viewEditingSourcesInternal model =
                 [ button AddEditingSrc "Add"
                 , text " "
                 , enabledButton
-                    ((editingIdx == model.editingIdx)
-                        && ((source.src /= model.editingSrc)
-                                || (source.label /= editingLabel)
-                                || (source.url /= editingUrl)
-                           )
-                    )
+                    (isEditingCurrent model)
                     ChangeEditingSrc
                     "Change"
                 , text " "
