@@ -2031,14 +2031,20 @@ msgs =
     }
 
 
-viewSrc : Bool -> String -> String -> String -> Html Msg
-viewSrc forTable url maxHeight maxWidth =
+isImageUrl : String -> Bool
+isImageUrl url =
     let
         fileUrlType =
             urlType url
+    in
+    List.member fileUrlType imgTypes
 
+
+viewSrc : Bool -> String -> String -> String -> Html Msg
+viewSrc forTable url maxHeight maxWidth =
+    let
         isImage =
-            List.member fileUrlType imgTypes
+            isImageUrl url
     in
     (if isImage then
         img
@@ -2098,17 +2104,6 @@ urlDisplay url =
         url
 
 
-{-| lastSources must contain the "people/" prefix.
--}
-lastSourcesSrc : String -> String
-lastSourcesSrc src =
-    if String.contains "/" src then
-        src
-
-    else
-        peoplePrefix ++ src
-
-
 computeImgSrc : Maybe Source -> Int -> ( String, String )
 computeImgSrc maybeSource idx =
     case maybeSource of
@@ -2136,8 +2131,11 @@ computeImgSrc maybeSource idx =
                                 else if String.contains "/" source.src then
                                     "https://"
 
-                                else
+                                else if isImageUrl source.src then
                                     imagePrefix ++ peoplePrefix
+
+                                else
+                                    "https://"
                         in
                         prefix ++ source.src
 
