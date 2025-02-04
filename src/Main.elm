@@ -1174,8 +1174,7 @@ updateInternal doUpdate msg modelIn =
                 Ok indexStrings ->
                     let
                         indexSources =
-                            Debug.log "GotIndex, srcSource" <|
-                                List.map srcSource indexStrings
+                            List.map srcSource indexStrings
 
                         mdl =
                             initializeEditingFields <|
