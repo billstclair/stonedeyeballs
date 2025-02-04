@@ -1174,7 +1174,8 @@ updateInternal doUpdate msg modelIn =
                 Ok indexStrings ->
                     let
                         indexSources =
-                            List.map srcSource indexStrings
+                            Debug.log "GotIndex, srcSource" <|
+                                List.map srcSource indexStrings
 
                         mdl =
                             initializeEditingFields <|
@@ -1565,8 +1566,11 @@ maybeAddNewSources indexStrings model =
             indexStringsSet =
                 AS.fromList <| List.map urlDisplay indexStrings
 
+            lastSources =
+                List.map urlDisplay model.lastSources
+
             lastSourcesSet =
-                AS.fromList model.lastSources
+                AS.fromList lastSources
 
             newSourcesSet =
                 AS.diff indexStringsSet lastSourcesSet
@@ -1587,6 +1591,7 @@ maybeAddNewSources indexStrings model =
         in
         { model
             | sources = model.sources ++ List.map srcSource newSources
+            , lastSources = lastSources
             , err = err
         }
 
