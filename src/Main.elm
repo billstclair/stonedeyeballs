@@ -2137,9 +2137,6 @@ urlDisplay url =
                 if String.startsWith "https://" url then
                     8
 
-                else if String.startsWith "http://" url then
-                    7
-
                 else
                     0
         in
@@ -2996,12 +2993,15 @@ viewEditingSourcesInternal model =
                 editingIdxChanged =
                     (editingIdx /= model.editingIdx)
                         && (editingIdx /= -1)
+
+                isCurrent =
+                    isEditingCurrent model
               in
               p []
                 [ button AddEditingSrc "Add"
                 , text " "
                 , enabledButton
-                    (isEditingCurrent model)
+                    (not isCurrent)
                     ChangeEditingSrc
                     "Change"
                 , text " "
@@ -3009,7 +3009,9 @@ viewEditingSourcesInternal model =
                     MoveEditingSrc
                     "Move"
                 , text " "
-                , enabledButton (editingIdx /= -1) LookupEditingSrc "Lookup"
+                , enabledButton (editingIdx /= -1 && not isCurrent)
+                    LookupEditingSrc
+                    "Lookup"
                 , text " "
                 , enabledButton (not (editingIdxChanged || editingIdx == -1))
                     DeleteEditingSrc
