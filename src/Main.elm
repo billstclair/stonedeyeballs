@@ -135,6 +135,7 @@ type alias Model =
     , undoModel : Maybe UndoModel
     , searchString : String
     , searchCnt : Int
+    , searchStart : Int
     , lastKey : String
     , isFocused : Bool
     , clipboard : String
@@ -411,6 +412,7 @@ init =
       , undoModel = Nothing
       , searchString = ""
       , searchCnt = 10
+      , searchStart = 0
       , lastKey = ""
       , isFocused = False
       , clipboard = ""
@@ -514,7 +516,8 @@ type Msg
     | SetCopyTo String
     | Undo
     | InputSearchString String
-    | SearchMore Bool
+    | SearchMore Bool Int
+    | ScrollSearch Bool Int
     | Focus Bool
     | InputClipboard String
     | ReadClipboard
@@ -742,7 +745,7 @@ updateInternal doUpdate msg modelIn =
             { model | switchPeriod = string }
                 |> withNoCmd
 
-        SearchMore morep ->
+        SearchMore morep matchCnt ->
             let
                 searchCnt =
                     model.searchCnt
@@ -766,9 +769,47 @@ updateInternal doUpdate msg modelIn =
 
                     else
                         10
+
+                newStart =
+                    if model.searchStart == 0 then
+                        model.searchStart
+
+                    else
+                        max 0 <| min model.searchStart <| matchCnt - newCnt
             in
-            { model | searchCnt = newCnt }
+            { model
+                | searchCnt = newCnt
+                , searchStart = newStart
+            }
                 |> withNoCmd
+
+        ScrollSearch downp matchCnt ->
+            let
+                mdl =
+                    if downp then
+                        let
+                            maxStart =
+                                matchCnt - model.searchCnt
+                        in
+                        if model.searchStart >= maxStart then
+                            model
+
+                        else
+                            { model
+                                | searchStart =
+                                    min maxStart <| model.searchStart + model.searchCnt
+                            }
+
+                    else if model.searchStart <= 0 then
+                        model
+
+                    else
+                        { model
+                            | searchStart =
+                                max 0 <| model.searchStart - model.searchCnt
+                        }
+            in
+            mdl |> withNoCmd
 
         ToggleSwitchEnabled ->
             ( { model
@@ -1106,7 +1147,10 @@ updateInternal doUpdate msg modelIn =
             undo model |> withNoCmd
 
         InputSearchString s ->
-            { model | searchString = s }
+            { model
+                | searchString = s
+                , searchStart = 0
+            }
                 |> withNoCmd
 
         Focus isFocused ->
@@ -2378,7 +2422,8 @@ viewControls model =
                         "Show Search"
                 ]
             , if model.showSearch then
-                Lazy.lazy3 viewSearch
+                Lazy.lazy4 viewSearch
+                    model.searchStart
                     model.searchCnt
                     model.searchString
                     model.sources
@@ -2598,8 +2643,8 @@ matchesSearchString string { src, label, url } =
         || caselessContains string url2
 
 
-viewSearch : Int -> String -> List Source -> Html Msg
-viewSearch searchCnt searchString sources =
+viewSearch : Int -> Int -> String -> List Source -> Html Msg
+viewSearch searchStart searchCnt searchString sources =
     span []
         [ h3 "Search"
         , p []
@@ -2622,7 +2667,7 @@ viewSearch searchCnt searchString sources =
                 List.length matchedPairs
 
             panels =
-                List.take searchCnt matchedPairs
+                List.take searchCnt <| List.drop searchStart matchedPairs
 
             tableColumnCnt =
                 4
@@ -2677,17 +2722,44 @@ viewSearch searchCnt searchString sources =
                     , List.map showSource panels |> List.concat
                     , [ tr
                             [ style "align" "left" ]
-                            [ Html.td [ colspan tableColumnCnt ]
+                            [ let
+                                cntDelta =
+                                    if searchStart == 0 then
+                                        0
+
+                                    else
+                                        1
+                              in
+                              Html.td [ colspan tableColumnCnt ]
                                 [ enabledButton
+                                    (searchStart < (matchCnt - searchCnt))
+                                    (ScrollSearch True matchCnt)
+                                    "v"
+                                , enabledButton
+                                    (searchStart > 0)
+                                    (ScrollSearch False matchCnt)
+                                    "^"
+                                , enabledButton
                                     (searchCnt < matchCnt)
-                                    (SearchMore True)
+                                    (SearchMore True matchCnt)
                                     "More"
                                 , text " "
                                 , enabledButton (searchCnt > 10)
-                                    (SearchMore False)
+                                    (SearchMore False matchCnt)
                                     "Less"
                                 , text " (showing "
-                                , text <| String.fromInt (min searchCnt matchCnt)
+                                , if searchStart > 0 then
+                                    span []
+                                        [ text <| String.fromInt searchStart
+                                        , text "-"
+                                        ]
+
+                                  else
+                                    text ""
+                                , text <|
+                                    String.fromInt <|
+                                        min (searchStart + searchCnt - cntDelta)
+                                            matchCnt
                                 , text " of "
                                 , text <| String.fromInt matchCnt
                                 , text " matches)"
