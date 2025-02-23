@@ -38,6 +38,23 @@ type alias Source =
     }
 
 
+fillSourceUrls : Source -> Source
+fillSourceUrls source =
+    canonicalizeSource source
+        |> (\src ->
+                { src
+                    | src = fullUrl src.src
+                    , url =
+                        case src.url of
+                            Nothing ->
+                                Nothing
+
+                            Just s ->
+                                Just <| fullUrl s
+                }
+           )
+
+
 canonicalizeSource : Source -> Source
 canonicalizeSource source =
     let
@@ -425,7 +442,9 @@ init =
 
 computeControlsJson : List Source -> String
 computeControlsJson sources =
-    JE.encode 2 <| JE.list encodeSource sources
+    JE.encode 2 <|
+        JE.list encodeSource <|
+            List.map fillSourceUrls sources
 
 
 
@@ -1445,10 +1464,6 @@ copyItems model =
                                     |> withNoCmd
 
                             Clipboard ->
-                                let
-                                    json =
-                                        JE.list encodeSource panel.panels
-                                in
                                 { model
                                     | err =
                                         Just <|
@@ -1456,7 +1471,10 @@ copyItems model =
                                                 ++ " to "
                                                 ++ copyOptionLabel Clipboard
                                 }
-                                    |> withCmd (clipboardWrite <| JE.encode 0 json)
+                                    |> withCmd
+                                        (clipboardWrite <|
+                                            computeControlsJson panel.panels
+                                        )
 
             Live ->
                 case model.copyTo of
@@ -1466,7 +1484,7 @@ copyItems model =
                     Clipboard ->
                         let
                             json =
-                                JE.list encodeSource model.sources
+                                computeControlsJson model.sources
                         in
                         { model
                             | err =
@@ -1475,7 +1493,7 @@ copyItems model =
                                         ++ " to "
                                         ++ copyOptionLabel Clipboard
                         }
-                            |> withCmd (clipboardWrite <| JE.encode 0 json)
+                            |> withCmd (clipboardWrite json)
 
                     Panel ->
                         copyToPanel (copyOptionLabel Live) model.sources model
@@ -2138,7 +2156,7 @@ urlDisplay url =
                     8
 
                 else
-                    0
+                    7
         in
         String.dropLeft cnt url
 
@@ -2197,6 +2215,23 @@ computeImgSrc maybeSource idx =
                                 u
             in
             ( src, url )
+
+
+fullUrl : String -> String
+fullUrl url =
+    if String.startsWith "http" url then
+        url
+
+    else
+        let
+            realUrl =
+                if List.member url nonPeopleFiles then
+                    url
+
+                else
+                    "people/" ++ url
+        in
+        "https://stonedeyeballs.com/images/" ++ realUrl
 
 
 viewInternal : Model -> Html Msg
