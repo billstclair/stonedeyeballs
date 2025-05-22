@@ -1,1 +1,2 @@
-echo xossbow:/var/www/stonedeyeballs.com
+echo localhost:/var/www/stonedeyeballs.not
+#echo xossbow:/var/www/stonedeyeballs.com
