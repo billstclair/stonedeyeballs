@@ -5,3 +5,4 @@ site/elm.js
 site/elm.min.js
 site/watch-color-scheme.js
 .DS_Store
+*~

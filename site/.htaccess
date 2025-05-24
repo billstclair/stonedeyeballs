@@ -1,0 +1,20 @@
+######################################################################
+#
+# .htaccess
+#
+# Rewrite rules for Apache.
+# If you don't use Apache's web server, then you won't use this.
+#
+# Map everything but the `images/` directory to https://fotojson.com/
+#
+######################################################################
+#
+# See https://httpd.apache.org/docs/2.4/howto/htaccess.html#when
+# If you have access to the Apache configuration for your web site,
+# put this in a <Directory> section there, instead of a .htaccess file.
+# (Not that "disk" access costs much these days.)
+#
+######################################################################
+
+
+
