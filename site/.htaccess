@@ -16,5 +16,27 @@
 #
 ######################################################################
 
+# Set some options.
+Options -Indexes
+Options +FollowSymLinks
 
+# Rewriting rules for the lisp server
+RewriteEngine on
+
+# You might need this. It's a path in the file system, not URI space
+#RewriteBase /home/wws/stonedeyeballs.not
+
+<IfModule mod_rewrite.c>
+
+# always use HTTPS
+RewriteCond "%{HTTPS}" "off" [NC]
+RewriteRule "^/?(.*)" "https://%{HTTP_HOST}/$1" [R,L,NE]
+
+RewriteCond not images/*   # TODO
+RewriteCond %{QUERY_STRING} ^(.+)$
+RewriteRule ^(.*)$ https://fotojson.com/$1%1 [P]
+
+RewriteCond not images/*   # TODO
+RewriteCond %{QUERY_STRING} ^$
+RewriteRule ^(.*)$ https://fotojson.com/$1?title="Stoned Eyeballs" [P]
 
