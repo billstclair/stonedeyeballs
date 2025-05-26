@@ -20,13 +20,15 @@
 Options -Indexes
 Options +FollowSymLinks
 
-# Rewriting rules for the lisp server
+<IfModule mod_rewrite.c>
+
+LogLevel alert rewrite:trace3
+
+# Rewriting rules
 RewriteEngine on
 
 # You might need this. It's a path in the file system, not URI space
 #RewriteBase /home/wws/stonedeyeballs.not
-
-<IfModule mod_rewrite.c>
 
 # always use HTTPS
 #RewriteCond "%{HTTPS}" "off" [NC]
