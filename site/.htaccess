@@ -47,3 +47,4 @@ RewriteCond %{REQUEST_URI} -index\.html
 RewriteCond "%{REQUEST_URI}" -""
 RewriteRule ^(.*)$ /$1?title="Stoned Eyeballs" [P]
 
+</IfModule>
