@@ -6,7 +6,7 @@
     <meta property="og:locale" content="en_US"/>
     <meta property="og:type" content="website"/>
     <meta property="og:title" content="StonedEyeballs"/>
-    <meta property="og:description" content="StonedEyeballs shows multiple imabges of the stoned eyeballs in Appalachian Naturals."
+    <meta property="og:description" content="StonedEyeballs shows multiple imabges of stoned eyeballs in Appalachian Natural."
     <meta property="og:url" content="https://StonedEyeballs.com/"/>
     <meta property="og:site_name" content="Stoned Eyeballs"/>
     <meta property="og:image" content="https://stonedeyeballs.com/images/eyeballs-500x360.png"/>
@@ -15,10 +15,14 @@
     <link rel='stylesheet' href='css/prettytable.css'>
     <link href='/images/icon-180.png' rel='apple-touch-icon' sizes='180x180'>
     <link rel="manifest" href="manifest.webmanifest">
-    <script type='text/javascript' src='js/PortFunnel.js'></script>
-    <script type='text/javascript' src='js/PortFunnel/LocalStorage.js'></script>
-    <script type='text/javascript' src='worker.js'></script>
+
+    <!-- Get FotoJson JS -->
+    <script type='text/javascript' src='js/js.js'></script>
     <script type='text/javascript' src='elm.js'></script>
+
+    <!-- Do-nothing worker needed to get some browsers to recognize a webapp. -->
+    <script type='text/javascript' src='worker.js'></script>
+
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
   </head>
@@ -36,62 +40,6 @@
         <a href='https://github.com/billstclair/stonedeyeballs'>GitHub</a>
       </p>
     </noscript>
-    <div id='elm-node'></div>
-      <script type='text/javascript'>
-        var app = Elm.Main.init({
-            node: document.getElementById("elm-node")
-        });
-        PortFunnel.subscribe(app);
-
-        // Call the selectElement port with an element ID string
-        // to select its contents
-        var selectElement = app.ports.selectElement;
-        if (selectElement) {
-          selectElement.subscribe(function(id) {
-            var element = document.getElementById(id);
-            if (element) {
-              element.select();
-            };
-          });
-        }
-
-        // Clipboard support
-        // Three ports:
-        //   clipboardWrite <string>
-        //   clipboardRead <ignored arg>
-        //   clipboardContents (<string> sent here after clipboardRead())
-        if (navigator && navigator.clipboard) {
-            var clipboardWrite = navigator.clipboard.writeText &&
-                app.ports.clipboardWrite;
-            if (clipboardWrite) {
-                clipboardWrite.subscribe(function(text) {
-                    if (typeof(text) == 'string') {
-                        try {
-                            navigator.clipboard.writeText(text);
-                        } catch (error) {
-                            console.error("clipboard.writeText failed:", error);
-                        }
-                    }
-                });
-            }
-            var clipboardContents = app.ports.clipboardContents;
-            if (clipboardContents) {
-                var clipboardRead = navigator.clipboard.readText &&
-                    app.ports.clipboardRead;
-                if (clipboardRead) {
-                    clipboardRead.subscribe(function() {
-                        try {
-                            navigator.clipboard.readText().then(function(data) {
-                                clipboardContents.send(data);
-                            })
-                            .catch(function(err) {});
-                        } catch (error) {
-                            console.error("clipboard.readText failed:", error);
-                        }
-                    });
-                }
-            }                
-        }
-      </script>
+    <script type='text/javascript' src='js/run.js'></script>
   </body>
 </html>

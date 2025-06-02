@@ -22,6 +22,7 @@ Options +FollowSymLinks
 
 <IfModule mod_rewrite.c>
 
+# Logging. Comment out to turn off logging.
 LogLevel alert rewrite:trace3
 
 # Rewriting rules
