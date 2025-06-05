@@ -22,9 +22,6 @@ Options +FollowSymLinks
 
 <IfModule mod_rewrite.c>
 
-# Logging. Comment out to turn off logging.
-LogLevel alert rewrite:trace3
-
 # Rewriting rules
 RewriteEngine on
 
@@ -36,15 +33,17 @@ RewriteEngine on
 #RewriteRule "^/?(.*)" "https://%{HTTP_HOST}/$1" [R,L,NE]
 
 RewriteCond %{QUERY_STRING} ^(.+)$
-RewriteCond %{REQUEST_URI} -images/.*
-RewriteCond %{REQUEST_URI} -index\.html
-RewriteCond "%{REQUEST_URI}" -""
+RewriteCond %{REQUEST_URI} !images/.*
+RewriteCond %{REQUEST_URI} !index\.html
+RewriteCond "%{REQUEST_URI}" !""
 RewriteRule ^(.*)$ https://fotojson.com/$1%1 [P]
 
 RewriteCond %{QUERY_STRING} ^$
-RewriteCond %{REQUEST_URI} -images/.*
-RewriteCond %{REQUEST_URI} -index\.html
-RewriteCond "%{REQUEST_URI}" -""
-RewriteRule ^(.*)$ /$1?title="Stoned Eyeballs" [P]
+RewriteCond %{REQUEST_URI} ^/$
+RewriteRule ^(.*)$ %{REQUEST_SCHEME}://{%HTTP_HOST}/?title=\'Stoned Eyeballs\' [P]
+
+RewriteCond %{QUERY_STRING} ^$
+RewriteCond %{QUERY_STRING} index.html
+RewriteRule ^(.*)$ %{REQUEST_SCHEME}://{%HTTP_HOST}/index.html?title=\'Stoned Eyeballs\' [P]
 
 </IfModule>
